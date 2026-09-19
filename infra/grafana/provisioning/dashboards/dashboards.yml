@@ -1,0 +1,16 @@
+# Any dashboard JSON dropped into infra/grafana/dashboards/ is picked up
+# automatically on restart. Step 5 fills that folder.
+
+apiVersion: 1
+
+providers:
+  - name: glassbox
+    orgId: 1
+    folder: Glassbox
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 15
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

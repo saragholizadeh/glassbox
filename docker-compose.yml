@@ -1,0 +1,188 @@
+# glassbox — local infrastructure.
+#
+# The three NestJS services are NOT in here. They run on your host with
+# `npm run dev` so you keep hot reload and a debugger. Everything they talk to
+# runs in Docker.
+#
+#   docker compose up -d      start everything
+#   docker compose ps         see what is healthy
+#   docker compose down       stop
+#   docker compose down -v    stop and wipe all stored data
+
+name: glassbox
+
+services:
+  # ---------------------------------------------------------------- data ----
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: glassbox-postgres
+    environment:
+      POSTGRES_USER: glassbox
+      POSTGRES_PASSWORD: glassbox
+      POSTGRES_DB: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U glassbox']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: glassbox-redis
+    command: redis-server --save '' --appendonly no
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # --------------------------------------------------------------- kafka ----
+
+  # KRaft mode: Kafka is its own controller, no Zookeeper needed.
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: glassbox-kafka
+    ports:
+      # 9092 is for containers talking to Kafka (host: kafka).
+      # 29092 is for your services running on the host (host: localhost).
+      - '29092:29092'
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: glassbox-local-cluster
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        ['CMD-SHELL', '/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1']
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
+
+  # Lets you SEE the messages — including their headers. In step 4 this is how
+  # you confirm the `traceparent` header actually made it onto the message.
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: glassbox-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - '8080:8080'
+    environment:
+      KAFKA_CLUSTERS_0_NAME: glassbox
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: 'true'
+
+  # ----------------------------------------------------------- telemetry ----
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    container_name: glassbox-otel-collector
+    command: ['--config=/etc/otel/config.yaml']
+    depends_on:
+      - tempo
+      - loki
+    ports:
+      - '4317:4317' # OTLP over gRPC  <- the services send here
+      - '4318:4318' # OTLP over HTTP
+      - '8889:8889' # /metrics page Prometheus scrapes
+    volumes:
+      - ./infra/otel-collector/config.yaml:/etc/otel/config.yaml:ro
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+  # NOTE on `user: "0:0"` below — Tempo and Loki run as a non-root user, but a
+  # fresh Docker volume is owned by root, so they cannot write to it. Running
+  # them as root is the simplest fix for a laptop. Do not copy this into a
+  # production setup.
+
+  tempo:
+    image: grafana/tempo:2.7.0
+    container_name: glassbox-tempo
+    user: '0:0'
+    command: ['-config.file=/etc/tempo/tempo.yaml']
+    ports:
+      - '3200:3200' # Tempo API / UI backend
+    volumes:
+      - ./infra/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: glassbox-loki
+    user: '0:0'
+    command: ['-config.file=/etc/loki/loki-config.yaml']
+    ports:
+      - '3100:3100'
+    volumes:
+      - ./infra/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: glassbox-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=24h'
+      # Needed so Tempo's metrics generator can push span metrics in.
+      - '--web.enable-remote-write-receiver'
+      - '--enable-feature=exemplar-storage'
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: glassbox-grafana
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    ports:
+      - '3000:3000'
+    environment:
+      # Local only: no login screen, straight to the dashboards.
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+      GF_FEATURE_TOGGLES_ENABLE: traceToMetrics,traceqlEditor,traceqlSearch
+      GF_LOG_LEVEL: warn
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  postgres-data:
+  kafka-data:
+  tempo-data:
+  loki-data:
+  prometheus-data:
+  grafana-data:

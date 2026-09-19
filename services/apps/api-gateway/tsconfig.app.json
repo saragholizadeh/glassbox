@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    // One shared dist for the whole monorepo.
+    //
+    // Because each app imports @app/common, TypeScript's output root becomes
+    // services/ rather than the app's own src/. Pointing every project at the
+    // same dist keeps that predictable — you get dist/apps/<app>/src/main.js
+    // and a single dist/libs/common — instead of each app carrying its own
+    // nested copy of the library.
+    "outDir": "../../dist"
+  },
+  "include": ["src/**/*", "../../libs/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
+}

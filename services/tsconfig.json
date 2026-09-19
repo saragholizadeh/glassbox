@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    // CommonJS on purpose, not ESM.
+    //
+    // OpenTelemetry's automatic instrumentation works by patching `require()`.
+    // If you switch this to ESM, OTel stops producing spans and gives you no
+    // error at all. See ../docs/step-03-tracing.md before changing it.
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "ES2023",
+
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+
+    "declaration": true,
+    "removeComments": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+
+    "strict": true,
+    "strictNullChecks": true,
+    "strictBindCallApply": true,
+    "noImplicitAny": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "paths": {
+      "@app/common": ["libs/common/src"],
+      "@app/common/*": ["libs/common/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist"]
+}

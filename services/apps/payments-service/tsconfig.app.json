@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    // See apps/api-gateway/tsconfig.app.json for why this is a shared dist.
+    "outDir": "../../dist"
+  },
+  "include": ["src/**/*", "../../libs/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
+}

@@ -1,0 +1,74 @@
+# Grafana datasources, provisioned automatically on startup.
+#
+# The interesting part is not the three URLs — it is the links between them:
+#
+#   Tempo -> Loki   (tracesToLogsV2)  click a slow span, see that request's logs
+#   Loki  -> Tempo  (derivedFields)   click a log line's trace id, see the trace
+#
+# That round trip is the whole payoff of steps 2 and 3. It is configured here
+# so it already works the moment the first trace arrives.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+      # Lets a metric point carry a trace id, so you can jump from a spike on
+      # a latency graph straight into one slow trace. Step 5 uses this.
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+        filterByTraceID: false
+        filterBySpanID: false
+        customQuery: true
+        # NOTE the doubled $$. Grafana expands ${...} in provisioning files as
+        # environment variables, so a single $ silently turns these into empty
+        # strings and the link stops working. $$ escapes it to a literal $.
+        query: '{service_name="$${__span.tags["service.name"]}"} | trace_id="$${__span.traceId}"'
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      streamingEnabled:
+        search: true
+
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        # Turns the trace_id on every log line into a clickable link.
+        - name: TraceID
+          matcherType: label
+          matcherRegex: trace_id
+          # Doubled $$ for the same reason as the Tempo query above.
+          url: '$${__value.raw}'
+          datasourceUid: tempo
+          urlDisplayLabel: 'View trace'

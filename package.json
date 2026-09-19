@@ -1,0 +1,31 @@
+{
+  "name": "glassbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Make a NestJS system observable: OpenTelemetry tracing, structured logging and metrics across three services and a Kafka hop.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup": "npm --prefix services install && node scripts/setup.mjs",
+
+    "up": "docker compose up -d && node scripts/urls.mjs",
+    "down": "docker compose down",
+    "reset": "docker compose down -v",
+    "ps": "docker compose ps",
+    "logs": "docker compose logs -f",
+
+    "check": "node scripts/check.mjs",
+
+    "dev": "npm --prefix services run dev",
+    "dev:gateway": "npm --prefix services run dev:gateway",
+    "dev:orders": "npm --prefix services run dev:orders",
+    "dev:payments": "npm --prefix services run dev:payments",
+
+    "build": "npm --prefix services run build",
+    "lint": "npm --prefix services run lint",
+    "format": "npm --prefix services run format",
+    "test": "npm --prefix services run test"
+  }
+}
