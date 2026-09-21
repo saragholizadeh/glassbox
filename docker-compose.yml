@@ -27,7 +27,12 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U glassbox']
+      # -d matters. Without it, pg_isready asks for a database named after the
+      # user ("glassbox"), which does not exist, and Postgres logs
+      # `FATAL: database "glassbox" does not exist` every 5 seconds forever.
+      # The check still passes — it only asks "did the server answer?" — so you
+      # get a healthy container and a log full of scary words.
+      test: ['CMD-SHELL', 'pg_isready -U glassbox -d postgres']
       interval: 5s
       timeout: 3s
       retries: 10
