@@ -16,6 +16,7 @@
     "start:gateway": "node dist/apps/api-gateway/src/main",
     "start:orders": "node dist/apps/orders-service/src/main",
     "start:payments": "node dist/apps/payments-service/src/main",
+    "bench:loggers": "node scripts/bench-loggers.mjs",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "lint": "eslint \"{apps,libs}/**/*.ts\" --fix",
     "test": "jest"
@@ -26,12 +27,14 @@
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/terminus": "^11.0.0",
+    "nest-winston": "^1.10.2",
     "nestjs-cls": "^5.4.3",
     "nestjs-pino": "^4.6.1",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

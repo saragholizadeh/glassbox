@@ -18,6 +18,37 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
+  # Tails the JSON log files the services write, and turns each line into a
+  # log record. This is how logs actually travel in production: the app just
+  # writes, and something else does the shipping. The app never blocks on the
+  # network, and if Loki is down you lose nothing — the files are still there.
+  filelog:
+    include: [/var/log/glassbox/*.log]
+    start_at: end
+    operators:
+      # Each line is already JSON, so parse it into fields.
+      - type: json_parser
+        parse_from: body
+        timestamp:
+          parse_from: attributes.time
+          layout: '%Y-%m-%dT%H:%M:%S.%LZ'
+        severity:
+          parse_from: attributes.level
+
+      # Loki turns RESOURCE attributes into labels you can filter on, but
+      # leaves plain attributes inside the line. `service` has to be promoted
+      # to a resource attribute or `{service_name="orders-service"}` matches
+      # nothing in Grafana.
+      - type: move
+        from: attributes.service
+        to: resource["service.name"]
+
+      # The human-readable text becomes the log body; everything else stays as
+      # structured fields alongside it.
+      - type: move
+        from: attributes.msg
+        to: body
+
 processors:
   # Stops the Collector eating all the memory on your laptop if a service
   # suddenly floods it. Always put this FIRST in every pipeline.
@@ -74,7 +105,7 @@ service:
       exporters: [prometheus]
 
     logs:
-      receivers: [otlp]
+      receivers: [otlp, filelog]
       processors: [memory_limiter, resource, batch]
       exporters: [otlphttp/loki]
 

@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { HealthModule } from '@app/common';
+import { HealthModule, LoggingModule } from '@app/common';
 import { AppController } from './app.controller';
+import { SERVICE_NAME } from './constants';
 
 @Module({
   imports: [
@@ -9,6 +10,7 @@ import { AppController } from './app.controller';
       isGlobal: true,
       envFilePath: ['../.env', '.env'],
     }),
+    LoggingModule.forRoot({ serviceName: SERVICE_NAME }),
     HealthModule,
   ],
   controllers: [AppController],

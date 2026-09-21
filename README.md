@@ -88,7 +88,7 @@ Each step runs on its own, so the repo is never in a half-broken state.
 | | Step | Status |
 |---|---|---|
 | 01 | Repo skeleton, infrastructure, health checks | ✅ done |
-| 02 | Structured logging with trace ids — Pino vs Winston | next |
+| 02 | Structured logging, request ids, Pino vs Winston | ✅ done |
 | 03 | OpenTelemetry in one service — your first trace | next |
 | 04 | Connect the services — HTTP, then the Kafka hop | |
 | 05 | Metrics and dashboards — RED + Node runtime | |
@@ -144,9 +144,23 @@ breaks it quietly.
 
 ---
 
+## Pino vs Winston, measured
+
+`orders-service` logs with Winston, the other two with Pino, both producing identical
+JSON. 200,000 lines to a file, Node 24 on Linux — `npm run bench:loggers`:
+
+| logger | lines/sec | µs/line | relative |
+|---|---|---|---|
+| **pino** | 230,427 | 4.34 | 1.00× |
+| winston | 101,741 | 9.83 | **2.27×** |
+
+Pino is ~2.2× faster — a real difference, and smaller than its folklore suggests.
+Both clear 100k lines/sec, which is more than most services will ever need.
+
 ## Docs
 
 - [Step 01 — skeleton and infrastructure](docs/step-01-skeleton.md)
+- [Step 02 — structured logging](docs/step-02-logging.md)
 
 ## License
 

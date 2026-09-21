@@ -12,6 +12,7 @@
  * with dashes or dots in them need bracket-and-quote form.
  */
 export const REDACTED_PATHS = [
+  // (Pino path syntax — see SENSITIVE_KEYS below for the Winston equivalent.)
   // Anything that identifies a caller
   'req.headers.authorization',
   'req.headers.cookie',
@@ -32,3 +33,31 @@ export const REDACTED_PATHS = [
   '*.cvv',
   '*.pan',
 ];
+
+/**
+ * The same secrets, as plain key names.
+ *
+ * Winston has no redaction feature at all, so we walk the log object by hand
+ * and censor any key in this set, at any depth. Pino's path syntax does not
+ * translate, which is why the same rule is expressed twice.
+ *
+ * Lowercased, because header names arrive in every capitalisation imaginable.
+ */
+export const SENSITIVE_KEYS = new Set([
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'x-api-key',
+  'password',
+  'passwordconfirmation',
+  'token',
+  'accesstoken',
+  'refreshtoken',
+  'secret',
+  'apikey',
+  'cardnumber',
+  'cvv',
+  'pan',
+]);
+
+export const CENSOR = '[Redacted]';

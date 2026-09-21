@@ -115,6 +115,9 @@ services:
       - '8889:8889' # /metrics page Prometheus scrapes
     volumes:
       - ./infra/otel-collector/config.yaml:/etc/otel/config.yaml:ro
+      # The services run on your host and write JSON here; the Collector tails
+      # it from inside the container. Read-only — it never writes to your logs.
+      - ./logs:/var/log/glassbox:ro
     extra_hosts:
       - 'host.docker.internal:host-gateway'
 
