@@ -3,6 +3,10 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# Structured log output. The OTel Collector tails this directory;
+# nothing in it belongs in git.
+logs/
+
 .env
 .env.local
 

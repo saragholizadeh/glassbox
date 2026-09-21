@@ -1,26 +1,28 @@
-import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { Logger as PinoLogger } from 'nestjs-pino';
 import { readServiceInfo } from '@app/common';
 import { AppModule } from './app.module';
 import { SERVICE_NAME, DEFAULT_PORT } from './constants';
 
 async function bootstrap(): Promise<void> {
   const info = readServiceInfo(SERVICE_NAME, DEFAULT_PORT);
-  const app = await NestFactory.create(AppModule);
 
-  // Lets Nest run onModuleDestroy / onApplicationShutdown on SIGTERM.
-  //
-  // Step 3 hangs the OpenTelemetry flush off this. Without it, the spans still
-  // sitting in memory when the container is killed are lost — which are
-  // exactly the spans from the requests that were failing.
+  // `bufferLogs` holds back anything logged during startup until our own
+  // logger is ready, so those early lines come out structured too instead of
+  // in Nest's default format.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // Replaces Nest's built-in logger everywhere. From here on, every
+  // `new Logger(...)` inside Nest — and inside your own code — writes
+  // structured JSON through Pino.
+  app.useLogger(app.get(PinoLogger));
+
   app.enableShutdownHooks();
-
   await app.listen(info.port);
 
-  Logger.log(
-    `${info.name} v${info.version} listening on http://localhost:${info.port}`,
-    'Bootstrap',
-  );
+  app
+    .get(PinoLogger)
+    .log(`${info.name} v${info.version} listening on http://localhost:${info.port}`);
 }
 
 void bootstrap();

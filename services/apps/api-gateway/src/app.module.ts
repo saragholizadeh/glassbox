@@ -1,17 +1,20 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { HealthModule } from '@app/common';
+import { HealthModule, LoggingModule } from '@app/common';
 import { AppController } from './app.controller';
+import { CheckoutService } from './checkout.service';
+import { SERVICE_NAME } from './constants';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      // One .env at the repo root, shared by all three services.
       envFilePath: ['../.env', '.env'],
     }),
+    LoggingModule.forRoot({ serviceName: SERVICE_NAME }),
     HealthModule,
   ],
   controllers: [AppController],
+  providers: [CheckoutService],
 })
 export class AppModule {}
