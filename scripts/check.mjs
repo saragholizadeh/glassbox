@@ -64,12 +64,39 @@ const GROUP_LABELS = {
   services: 'NestJS services',
 };
 
-const results = await Promise.all(
-  targets.map(async (t) => ({
-    ...t,
-    ...(t.kind === 'tcp' ? await checkTcp(t) : await checkHttp(t)),
-  })),
-);
+const probe = (t) => (t.kind === 'tcp' ? checkTcp(t) : checkHttp(t));
+
+/**
+ * Keep retrying until everything required is up, or we give up.
+ *
+ * Nothing here is instant. Kafka takes ~20s to elect itself leader, and Tempo
+ * and Loki answer 503 for their first half-minute while their internal rings
+ * form. A single pass right after `npm run up` reports failures that fix
+ * themselves, which teaches you to distrust your own tooling.
+ */
+const WAIT_SECONDS = Number(process.env.CHECK_WAIT ?? 90);
+const deadline = Date.now() + WAIT_SECONDS * 1000;
+
+let results = [];
+let waited = false;
+
+for (;;) {
+  results = await Promise.all(
+    targets.map(async (t) => ({ ...t, ...(await probe(t)) })),
+  );
+
+  const missing = results.filter((r) => !r.ok && !r.optional);
+  if (missing.length === 0 || Date.now() >= deadline) break;
+
+  if (!waited) {
+    process.stdout.write(`\n  waiting for ${missing.map((m) => m.name).join(', ')}`);
+    waited = true;
+  }
+  process.stdout.write('.');
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+}
+
+if (waited) process.stdout.write('\n');
 
 let required = 0;
 let requiredOk = 0;
@@ -105,7 +132,10 @@ if (requiredOk === required) {
   process.exit(0);
 }
 
-console.log(`${RED}${required - requiredOk} of ${required} checks failed.${RESET}`);
-console.log(`${DIM}Kafka needs ~20s after 'npm run up'. If it stays down: docker compose logs kafka${RESET}`);
+console.log(
+  `${RED}${required - requiredOk} of ${required} checks failed${RESET}` +
+    ` ${DIM}after waiting ${WAIT_SECONDS}s.${RESET}`,
+);
+console.log(`${DIM}Look at the logs of whatever failed, e.g.  docker compose logs tempo${RESET}`);
 console.log('');
 process.exit(1);
