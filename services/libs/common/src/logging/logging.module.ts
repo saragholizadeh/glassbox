@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { DynamicModule, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import {
+  DynamicModule,
+  Inject,
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+} from '@nestjs/common';
 import { ClsModule } from 'nestjs-cls';
 import { LoggerModule as PinoModule } from 'nestjs-pino';
 import { WinstonModule } from 'nest-winston';
@@ -8,8 +14,9 @@ import { buildPinoOptions } from './pino-options';
 import { buildWinstonOptions } from './winston-options';
 import { HttpLoggerMiddleware } from './http-logger.middleware';
 
-/** Which logging library this service uses. */
 export type LogDriver = 'pino' | 'winston';
+
+export const LOG_DRIVER = 'LOG_DRIVER';
 
 export interface LoggingOptions {
   /** Stamped on every log line, and used for the log file name. */
@@ -18,43 +25,39 @@ export interface LoggingOptions {
   driver?: LogDriver;
 }
 
-/** Set at import time so the middleware can be mounted conditionally. */
-let activeDriver: LogDriver = 'pino';
-
 /**
  * Structured logging plus per-request context, in one import.
  *
- * Whichever driver is chosen, the output shape is identical — same field
- * names, same request id, same redaction, same health-check filtering — so a
- * single Loki query works across every service.
+ * Two things are wired together:
  *
- * Two things are always wired together here:
- *
- *  1. ClsModule — AsyncLocalStorage. Runs before your handlers, generates a
- *     request id, keeps it available for the whole request without anything
- *     having to pass it around.
+ *  1. ClsModule — AsyncLocalStorage. Runs before your handlers, makes a request
+ *     id, and keeps it available for the whole request without anything having
+ *     to pass it around.
  *
  *  2. The logger, which reads that id back out and puts it on every line.
+ *
+ * Both drivers produce the same JSON, so one Loki query works everywhere.
  */
 @Module({})
 export class LoggingModule implements NestModule {
+  constructor(@Inject(LOG_DRIVER) private readonly driver: LogDriver) {}
+
   static forRoot(options: LoggingOptions): DynamicModule {
     const driver = options.driver ?? 'pino';
-    activeDriver = driver;
 
-    const clsModule = ClsModule.forRoot({
+    const cls = ClsModule.forRoot({
       global: true,
       middleware: {
         mount: true,
         generateId: true,
         /**
-         * Reuse the caller's request id when there is one, otherwise make a
-         * new one.
+         * Reuse the caller's request id if there is one, otherwise make a new
+         * one.
          *
          * Honouring an incoming `x-request-id` is what lets the id survive a
          * hop between services — and it is also this approach's ceiling. Every
-         * service has to remember to forward the header by hand, and it breaks
-         * entirely once a message goes through Kafka.
+         * service has to forward the header by hand, and it breaks entirely
+         * once a message goes through Kafka.
          *
          * Step 3 replaces this with an OpenTelemetry trace id, which crosses
          * those boundaries on its own.
@@ -64,31 +67,31 @@ export class LoggingModule implements NestModule {
       },
     });
 
-    if (driver === 'winston') {
-      return {
-        module: LoggingModule,
-        imports: [
-          clsModule,
-          WinstonModule.forRoot(buildWinstonOptions(options.serviceName)),
-        ],
-        providers: [HttpLoggerMiddleware],
-        exports: [ClsModule, WinstonModule],
-      };
-    }
+    const isWinston = driver === 'winston';
+
+    const logger = isWinston
+      ? WinstonModule.forRoot(buildWinstonOptions(options.serviceName))
+      : PinoModule.forRoot(buildPinoOptions(options.serviceName));
 
     return {
       module: LoggingModule,
-      imports: [clsModule, PinoModule.forRoot(buildPinoOptions(options.serviceName))],
-      exports: [ClsModule, PinoModule],
+      imports: [cls, logger],
+      providers: [
+        { provide: LOG_DRIVER, useValue: driver },
+        // Only on the Winston path. This middleware injects Winston's logger,
+        // which does not exist when Pino is the driver.
+        ...(isWinston ? [HttpLoggerMiddleware] : []),
+      ],
+      exports: [ClsModule, logger],
     };
   }
 
   /**
-   * Pino's package mounts its own request logger. Winston has none, so we
-   * mount ours only in that case.
+   * nestjs-pino mounts its own request logger. Winston has none, so we mount
+   * ours only in that case.
    */
   configure(consumer: MiddlewareConsumer): void {
-    if (activeDriver === 'winston') {
+    if (this.driver === 'winston') {
       consumer.apply(HttpLoggerMiddleware).forRoutes('*');
     }
   }

@@ -1,22 +1,23 @@
 # glassbox
 
-**Make a NestJS system observable.** OpenTelemetry tracing, structured logging and
-metrics across three services and a Kafka hop — with real performance bugs planted
-on purpose, and a walkthrough of catching each one.
+**Learn how to watch a NestJS system in production.**
 
-Most observability examples show you a config file and an empty dashboard. This one
-gives you a system that is genuinely broken in five instructive ways, and teaches you
-to find each break using the tooling.
+Three small services, a Kafka queue, and the full set of tools: OpenTelemetry for
+tracing, Prometheus for metrics, Loki for logs, Grafana to look at it all.
+
+Later the project will contain **five performance bugs added on purpose**. You find
+each one with the tools. That is the point — not the config files, but learning to
+read what they tell you.
 
 ---
 
-## The story every diagram follows
+## The system
 
-One user clicks **Buy**. That single request travels:
+One user clicks **Buy**. The request goes like this:
 
 ```mermaid
 flowchart LR
-    k6[k6<br/>fake users] -->|traffic| GW[api-gateway]
+    k6[k6<br/>fake traffic] -->|requests| GW[api-gateway]
     GW -->|HTTP| OR[orders-service]
     OR --> PG[(Postgres)]
     OR --> RD[(Redis)]
@@ -25,90 +26,110 @@ flowchart LR
     PAY --> PG2[(Postgres)]
 ```
 
-Three services, because a trace through a single app is a straight line and teaches
-you nothing. The interesting question is how `payments-service` knows it belongs to
-the same request that started in `api-gateway` — and the Kafka hop is where that gets
-hard, because NestJS microservice transports are **not** instrumented for you.
+Why three services and not one? Because with one service there is nothing to learn.
+The hard question is how `payments-service` knows it is part of the same request that
+started in `api-gateway`.
+
+Over HTTP that works by itself. Through Kafka it does not. NestJS does not pass the
+trace id into Kafka messages, so you have to do it yourself. That is the most useful
+part of this repo.
 
 ---
 
-## Quick start
+## Start it
 
-Needs Docker and Node 20+.
+You need Docker and Node 20 or newer.
 
 ```bash
-npm run setup     # install dependencies, create .env
-npm run up        # start Kafka, Postgres, Redis and the LGTM stack
-npm run check     # confirm everything is actually reachable
-npm run dev       # run all three services with hot reload
+npm run setup     # install packages, create .env
+npm run up        # start the tools in Docker
+npm run check     # test that everything answers
+npm run dev       # start the three services
 ```
 
-Then open **http://localhost:3000** for Grafana.
+Open Grafana at **http://localhost:3000**.
+
+Try it:
 
 ```bash
 curl localhost:3001/health/ready
-curl -X POST localhost:3001/checkout
+curl -X POST localhost:3001/checkout -H 'content-type: application/json' -d '{"orderId":1}'
 ```
 
-Other commands: `npm run down`, `npm run reset` (wipes all stored data),
+Other commands: `npm run down` (stop), `npm run reset` (stop and delete all data),
 `npm run ps`, `npm run logs`, `npm run build`, `npm run lint`.
 
-Prefer a GUI? Import [`postman/glassbox.postman_collection.json`](postman/) — every
-endpoint, ready to click.
+Prefer a GUI? Import [`postman/glassbox.postman_collection.json`](postman/).
 
 ---
 
-## What's running
+## What is running
 
-| | URL | What it's for |
+| | URL | What it does |
 |---|---|---|
-| **Grafana** | http://localhost:3000 | The screen you actually look at |
-| **Kafka UI** | http://localhost:8080 | See messages *and their headers* |
-| Prometheus | http://localhost:9090 | Metrics storage |
-| Tempo | http://localhost:3200 | Trace storage |
-| Loki | http://localhost:3100 | Log storage |
-| OTel Collector | localhost:4317 | Where services send telemetry |
-| Postgres | localhost:5432 | `orders` and `payments` databases |
+| **Grafana** | http://localhost:3000 | The page you look at |
+| **Kafka UI** | http://localhost:8080 | See messages and their headers |
+| Prometheus | http://localhost:9090 | Stores metrics (numbers over time) |
+| Tempo | http://localhost:3200 | Stores traces (the path of one request) |
+| Loki | http://localhost:3100 | Stores logs |
+| OTel Collector | localhost:4317 | Services send all data here first |
+| Postgres | localhost:5432 | Two databases: `orders` and `payments` |
 | Redis | localhost:6379 | Cache |
-| Kafka | localhost:29092 | Broker |
-| api-gateway | http://localhost:3001 | Runs on your host |
-| orders-service | http://localhost:3002 | Runs on your host |
-| payments-service | http://localhost:3003 | Runs on your host |
+| Kafka | localhost:29092 | The message queue |
+| api-gateway | http://localhost:3001 | Runs on your machine, not in Docker |
+| orders-service | http://localhost:3002 | Runs on your machine |
+| payments-service | http://localhost:3003 | Runs on your machine |
 
-The services deliberately run on your machine rather than in Docker, so you keep hot
-reload and a working debugger.
+The services run on your machine on purpose, so you keep hot reload and a debugger.
 
-Grafana is already provisioned with all three datasources **and the links between
-them** — click a slow span and jump to that request's log lines, or click a log
-line's trace id and jump to the trace.
+Grafana already knows about all three storage tools, **and about the links between
+them**. Click a slow step in a trace and jump to that request's log lines.
 
 ---
 
 ## Build order
 
-Each step runs on its own, so the repo is never in a half-broken state.
+Each step works on its own, so the project is never half broken.
 
-| | Step | Status |
+| | Step | |
 |---|---|---|
-| 01 | Repo skeleton, infrastructure, health checks | ✅ done |
-| 02 | Structured logging, request ids, Pino vs Winston | ✅ done |
-| 03 | OpenTelemetry in one service — your first trace | next |
-| 04 | Connect the services — HTTP, then the Kafka hop | |
-| 05 | Metrics and dashboards — RED + Node runtime | |
-| 06 | k6 traffic generator | |
-| 07 | The five planted bugs, with write-ups | |
-| 08 | Continuous profiling with Pyroscope | |
+| 01 | Project skeleton, Docker, health checks | done |
+| 02 | JSON logs, request ids, Pino vs Winston | done |
+| 03 | OpenTelemetry — your first trace | next |
+| 04 | Connect the services — HTTP, then Kafka | |
+| 05 | Metrics and dashboards | |
+| 06 | k6 — a tool that makes fake traffic | |
+| 07 | The five bugs, with a guide for each | |
+| 08 | Profiling — find which function uses the CPU | |
 
-### The five planted bugs (step 07)
+### The five bugs (step 07)
 
-1. **Event loop blocking** — one synchronous call freezes every other request.
-   Found with a flamegraph.
-2. **N+1 queries** — 51 database round trips instead of 2. Visible as 51 little
-   bars in one trace.
-3. **Request-scoped providers** — a NestJS trap where `Scope.REQUEST` silently
-   makes the whole ancestor chain request-scoped and throughput falls off a cliff.
-4. **Broken trace context** — the Kafka hop, before the fix.
-5. **Metric cardinality explosion** — a `userId` label takes down Prometheus.
+1. **Blocking the event loop** — one slow synchronous call freezes every other
+   request. Found with a flamegraph. This is the classic Node.js production problem.
+2. **N+1 queries** — 51 database calls instead of 2. In a trace you see 51 small bars
+   in a row.
+3. **Request-scoped providers** — a NestJS trap. `Scope.REQUEST` quietly makes
+   everything above it rebuild on every request, and throughput drops hard.
+4. **A broken trace** — the Kafka hop, before the fix.
+5. **Too many metric labels** — a `userId` label creates millions of time series and
+   takes Prometheus down.
+
+---
+
+## Pino vs Winston
+
+`orders-service` uses Winston. The other two use Pino. Both write **identical JSON**,
+so one Loki query finds logs from all three.
+
+200,000 lines written to a file — `npm run bench:loggers`:
+
+| logger | lines/sec | relative |
+|---|---|---|
+| **pino** | 230,427 | 1.00× |
+| winston | 101,741 | **2.27×** slower |
+
+Pino is about 2.2× faster. Both write over 100,000 lines a second, which is far more
+than most services need. Useful to know the real number instead of the folklore.
 
 ---
 
@@ -121,46 +142,29 @@ glassbox/
 │   │   ├── api-gateway/
 │   │   ├── orders-service/
 │   │   └── payments-service/
-│   └── libs/common/       # shared health module, service identity
+│   └── libs/common/       # health checks, logging
 ├── infra/                 # config for every container
-│   ├── otel-collector/
-│   ├── tempo/  loki/  prometheus/  grafana/
-│   └── postgres/
-├── docs/                  # one walkthrough per step
-├── load/                  # k6 scenarios (step 6)
-├── scripts/check.mjs      # `npm run check`
+├── docs/                  # one guide per step
+├── postman/               # all endpoints, ready to import
+├── scripts/check.mjs      # npm run check
 └── docker-compose.yml
 ```
 
 ---
 
-## Two traps worth knowing before step 3
+## Two traps worth knowing
 
-**OpenTelemetry must start before NestJS does.** The services will launch with
-`node --require ./dist/tracing.js`, not with an import at the top of `main.ts`. Get
-this wrong and OTel produces zero spans and gives you *no error at all* — just
-silence. It is the most common way to lose an evening here.
+**OpenTelemetry must start before NestJS.** From step 3 the services start with
+`node --require ./dist/tracing.js`, not with an import at the top of `main.ts`. If you
+get this wrong, OTel makes no traces and shows **no error** — only silence.
 
-**Stay on CommonJS.** `services/tsconfig.json` sets `"module": "commonjs"` on
-purpose. OTel's automatic instrumentation patches `require()`; switching to ESM
+**Keep CommonJS.** `services/tsconfig.json` sets `"module": "commonjs"` on purpose.
+OTel's automatic instrumentation works by patching `require()`. Switching to ESM
 breaks it quietly.
 
 ---
 
-## Pino vs Winston, measured
-
-`orders-service` logs with Winston, the other two with Pino, both producing identical
-JSON. 200,000 lines to a file, Node 24 on Linux — `npm run bench:loggers`:
-
-| logger | lines/sec | µs/line | relative |
-|---|---|---|---|
-| **pino** | 230,427 | 4.34 | 1.00× |
-| winston | 101,741 | 9.83 | **2.27×** |
-
-Pino is ~2.2× faster — a real difference, and smaller than its folklore suggests.
-Both clear 100k lines/sec, which is more than most services will ever need.
-
-## Docs
+## Guides
 
 - [Step 01 — skeleton and infrastructure](docs/step-01-skeleton.md)
 - [Step 02 — structured logging](docs/step-02-logging.md)

@@ -2,7 +2,7 @@ import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { ClsServiceManager } from 'nestjs-cls';
 import winston from 'winston';
-import { CENSOR, SENSITIVE_KEYS } from './redaction';
+import { CENSOR, SECRET_FIELDS_LOWER } from './redaction';
 import { logDirectory } from './pino-options';
 
 /**
@@ -20,7 +20,7 @@ function deepRedact(value: unknown, depth = 0): unknown {
 
   const out: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-    out[key] = SENSITIVE_KEYS.has(key.toLowerCase())
+    out[key] = SECRET_FIELDS_LOWER.has(key.toLowerCase())
       ? CENSOR
       : deepRedact(val, depth + 1);
   }
@@ -43,7 +43,7 @@ function deepRedact(value: unknown, depth = 0): unknown {
 const redactFormat = winston.format((info) => {
   for (const key of Object.keys(info)) {
     const record = info as unknown as Record<string, unknown>;
-    record[key] = SENSITIVE_KEYS.has(key.toLowerCase())
+    record[key] = SECRET_FIELDS_LOWER.has(key.toLowerCase())
       ? CENSOR
       : deepRedact(record[key], 1);
   }
