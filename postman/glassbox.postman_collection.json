@@ -1,0 +1,214 @@
+{
+  "info": {
+    "name": "glassbox",
+    "description": "The endpoints of the three glassbox services.\n\nStart the stack with `npm run up` and `npm run dev`, then run any request.\n\nBase URLs are collection variables — change them once if your ports differ.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "gateway", "value": "http://localhost:3001" },
+    { "key": "orders", "value": "http://localhost:3002" },
+    { "key": "payments", "value": "http://localhost:3003" }
+  ],
+  "item": [
+    {
+      "name": "api-gateway",
+      "item": [
+        {
+          "name": "Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{gateway}}/", "host": ["{{gateway}}"], "path": [""] },
+            "description": "What this service is and which endpoints it has."
+          }
+        },
+        {
+          "name": "Checkout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "content-type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 777,\n  \"amountCents\": 4200\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/checkout",
+              "host": ["{{gateway}}"],
+              "path": ["checkout"]
+            },
+            "description": "The main request. Copy the requestId from the response, then search for it in Grafana → Explore → Loki:\n\n    {service_name=~\".+\"} | req_id = `paste-it-here`\n\nYou get that one request's log lines and nothing else."
+          }
+        },
+        {
+          "name": "Checkout with my own request id",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "content-type", "value": "application/json" },
+              { "key": "x-request-id", "value": "my-own-id-12345" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 888\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/checkout",
+              "host": ["{{gateway}}"],
+              "path": ["checkout"]
+            },
+            "description": "If you send an x-request-id header, the service reuses it instead of making a new one. Easier to search for than a UUID."
+          }
+        },
+        {
+          "name": "Checkout with secrets (redaction test)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "content-type", "value": "application/json" },
+              { "key": "authorization", "value": "Bearer super-secret-token-12345" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 9,\n  \"password\": \"hunter2\",\n  \"cardNumber\": \"4111111111111111\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/checkout",
+              "host": ["{{gateway}}"],
+              "path": ["checkout"]
+            },
+            "description": "Sends fake secrets on purpose. Then check they were never written:\n\n    grep -c 'hunter2' logs/api-gateway.log\n\nShould be 0."
+          }
+        },
+        {
+          "name": "404 (becomes a warning)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/this-route-does-not-exist",
+              "host": ["{{gateway}}"],
+              "path": ["this-route-does-not-exist"]
+            },
+            "description": "The log level comes from the status code: 5xx is error, 4xx is warn.\n\nFind it with:  {service_name=~\".+\"} | level = \"warn\""
+          }
+        },
+        {
+          "name": "Health · live",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/health/live",
+              "host": ["{{gateway}}"],
+              "path": ["health", "live"]
+            },
+            "description": "\"Is the process alive?\" Failing this restarts the container, so it never checks a database.\n\nHealth checks are not logged. Call it ten times, then:\n\n    grep -c '/health/live' logs/api-gateway.log"
+          }
+        },
+        {
+          "name": "Health · ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/health/ready",
+              "host": ["{{gateway}}"],
+              "path": ["health", "ready"]
+            },
+            "description": "\"Should traffic come here?\" Failing this removes the instance from the load balancer but keeps it running."
+          }
+        }
+      ]
+    },
+    {
+      "name": "orders-service",
+      "item": [
+        {
+          "name": "Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{orders}}/", "host": ["{{orders}}"], "path": [""] },
+            "description": "This service logs with Winston. The other two use Pino. Both write the same JSON."
+          }
+        },
+        {
+          "name": "Create order",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{orders}}/orders",
+              "host": ["{{orders}}"],
+              "path": ["orders"]
+            }
+          }
+        },
+        {
+          "name": "Health · live",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orders}}/health/live",
+              "host": ["{{orders}}"],
+              "path": ["health", "live"]
+            }
+          }
+        },
+        {
+          "name": "Health · ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orders}}/health/ready",
+              "host": ["{{orders}}"],
+              "path": ["health", "ready"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "payments-service",
+      "item": [
+        {
+          "name": "Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{payments}}/", "host": ["{{payments}}"], "path": [""] }
+          }
+        },
+        {
+          "name": "Health · live",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{payments}}/health/live",
+              "host": ["{{payments}}"],
+              "path": ["health", "live"]
+            }
+          }
+        },
+        {
+          "name": "Health · ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{payments}}/health/ready",
+              "host": ["{{payments}}"],
+              "path": ["health", "ready"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

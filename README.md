@@ -53,6 +53,9 @@ curl -X POST localhost:3001/checkout
 Other commands: `npm run down`, `npm run reset` (wipes all stored data),
 `npm run ps`, `npm run logs`, `npm run build`, `npm run lint`.
 
+Prefer a GUI? Import [`postman/glassbox.postman_collection.json`](postman/) — every
+endpoint, ready to click.
+
 ---
 
 ## What's running
