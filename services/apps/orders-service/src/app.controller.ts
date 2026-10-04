@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Post } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post } from '@nestjs/common';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { ClsService } from 'nestjs-cls';
 import type { Logger } from 'winston';
@@ -22,12 +22,12 @@ export class AppController {
     };
   }
 
-  /** From step 4, api-gateway calls this. For now it only writes logs. */
+  /** api-gateway calls this. For now it only writes logs. */
   @Post('orders')
-  create() {
-    const orderId = Math.floor(Math.random() * 1000);
+  create(@Body() body: { orderId?: number; amountCents?: number }) {
+    const orderId = body.orderId ?? Math.floor(Math.random() * 1000);
 
-    this.logger.info('order received', { orderId });
+    this.logger.info('order received', { orderId, amountCents: body.amountCents });
     this.logger.info('order persisted', { orderId, table: 'orders' });
 
     return { orderId, status: 'created', requestId: this.cls.getId() };

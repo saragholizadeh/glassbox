@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadGatewayException, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { trace } from '@opentelemetry/api';
 import { SERVICE_NAME } from './constants';
@@ -33,5 +33,26 @@ export class CheckoutService {
       span.end();
       return { orderId, reserved: true };
     });
+  }
+
+  /**
+   * Calls orders-service. We add no tracing code here: OTel adds a
+   * `traceparent` header to the request, so the trace continues there.
+   */
+  async createOrder(orderId: number, amountCents: number) {
+    const ordersUrl = process.env.ORDERS_URL ?? 'http://localhost:3002';
+
+    const res = await fetch(`${ordersUrl}/orders`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ orderId, amountCents }),
+    });
+
+    if (!res.ok) {
+      this.logger.error({ orderId, status: res.status }, 'orders-service failed');
+      throw new BadGatewayException('orders-service failed');
+    }
+
+    return (await res.json()) as { orderId: number; status: string };
   }
 }

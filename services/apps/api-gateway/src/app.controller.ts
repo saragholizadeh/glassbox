@@ -18,13 +18,13 @@ export class AppController {
   info() {
     return {
       service: SERVICE_NAME,
-      role: 'The front door. Receives the checkout and (from step 4) calls orders-service.',
+      role: 'The front door. Receives the checkout and calls orders-service.',
       endpoints: ['GET /', 'POST /checkout', 'GET /health/live', 'GET /health/ready'],
       requestId: this.cls.getId(),
     };
   }
 
-  /** The main request of the project. From step 4 it calls orders-service. */
+  /** The main request of the project: reserve stock, then create the order. */
   @Post('checkout')
   async checkoutOrder(@Body() body: { orderId?: number; amountCents?: number }) {
     const orderId = body.orderId ?? 99;
@@ -32,16 +32,16 @@ export class AppController {
 
     this.logger.info({ orderId, amountCents }, 'checkout started');
 
-    const result = await this.checkout.reserve(orderId, amountCents);
+    await this.checkout.reserve(orderId, amountCents);
+    const order = await this.checkout.createOrder(orderId, amountCents);
 
     this.logger.info({ orderId }, 'checkout finished');
 
     return {
-      status: 'stub',
+      ...order,
       requestId: this.cls.getId(),
       // Paste this into Grafana → Explore → Tempo to see the trace.
       traceId: trace.getActiveSpan()?.spanContext().traceId,
-      ...result,
     };
   }
 }
