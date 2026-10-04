@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ClsService } from 'nestjs-cls';
+import { trace } from '@opentelemetry/api';
 import { CheckoutService } from './checkout.service';
 import { SERVICE_NAME } from './constants';
 
@@ -17,19 +18,13 @@ export class AppController {
   info() {
     return {
       service: SERVICE_NAME,
-      role: 'Public entry point. Receives the checkout request and calls orders-service.',
+      role: 'The front door. Receives the checkout and (from step 4) calls orders-service.',
       endpoints: ['GET /', 'POST /checkout', 'GET /health/live', 'GET /health/ready'],
       requestId: this.cls.getId(),
     };
   }
 
-  /**
-   * The request every diagram in the project follows.
-   *
-   * Step 4 makes this call orders-service over HTTP. For now it logs its way
-   * through a couple of layers so you can watch one request id tie the lines
-   * together.
-   */
+  /** The main request of the project. From step 4 it calls orders-service. */
   @Post('checkout')
   async checkoutOrder(@Body() body: { orderId?: number; amountCents?: number }) {
     const orderId = body.orderId ?? 99;
@@ -44,8 +39,9 @@ export class AppController {
     return {
       status: 'stub',
       requestId: this.cls.getId(),
+      // Paste this into Grafana → Explore → Tempo to see the trace.
+      traceId: trace.getActiveSpan()?.spanContext().traceId,
       ...result,
-      note: 'Wired to orders-service in step 4 — see docs/step-04-propagation.md',
     };
   }
 }

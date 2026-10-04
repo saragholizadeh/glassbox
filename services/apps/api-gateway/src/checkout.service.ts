@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { trace } from '@opentelemetry/api';
+import { SERVICE_NAME } from './constants';
+
+const tracer = trace.getTracer(SERVICE_NAME);
 
 /**
- * Deliberately two layers deep and holding no request id of its own.
- *
- * Notice what is NOT in these method signatures: nothing is passed in to
- * identify the request. The id still appears on every line below, because
- * AsyncLocalStorage carries it — including across the `await`, which is the
- * part a plain variable could never survive.
+ * Notice: no request id is passed in. The logs still have it, because
+ * AsyncLocalStorage carries it — even across the `await`.
  */
 @Injectable()
 export class CheckoutService {
@@ -17,12 +17,21 @@ export class CheckoutService {
   ) {}
 
   async reserve(orderId: number, amountCents: number) {
-    this.logger.info({ orderId, amountCents }, 'reserving stock');
+    // A manual span. OTel times HTTP requests by itself, but it does not
+    // know about our own code. This makes "reserve stock" a step in the trace.
+    return tracer.startActiveSpan('reserve stock', async (span) => {
+      // Attributes are extra info you can see on the span in Grafana.
+      span.setAttribute('order.id', orderId);
 
-    // Stand-in for real work. The id survives this gap.
-    await new Promise((resolve) => setTimeout(resolve, 15));
+      this.logger.info({ orderId, amountCents }, 'reserving stock');
 
-    this.logger.info({ orderId }, 'stock reserved');
-    return { orderId, reserved: true };
+      // Pretend to do some work.
+      await new Promise((resolve) => setTimeout(resolve, 15));
+
+      this.logger.info({ orderId }, 'stock reserved');
+
+      span.end();
+      return { orderId, reserved: true };
+    });
   }
 }
