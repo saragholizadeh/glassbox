@@ -6,4 +6,4 @@
 CREATE DATABASE orders;
 CREATE DATABASE payments;
 
--- Tables come in step 4.
+-- Tables come later.

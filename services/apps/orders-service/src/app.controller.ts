@@ -3,12 +3,14 @@ import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { ClsService } from 'nestjs-cls';
 import type { Logger } from 'winston';
 import { SERVICE_NAME } from './constants';
+import { OrderEventsService } from './order-events.service';
 
 @Controller()
 export class AppController {
   constructor(
     @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger,
     private readonly cls: ClsService,
+    private readonly events: OrderEventsService,
   ) {}
 
   @Get()
@@ -22,13 +24,19 @@ export class AppController {
     };
   }
 
-  /** api-gateway calls this. For now it only writes logs. */
+  /**
+   * api-gateway calls this. We tell payments-service about the new order
+   * through Kafka, and answer right away. We don't wait for the payment.
+   */
   @Post('orders')
-  create(@Body() body: { orderId?: number; amountCents?: number }) {
+  async create(@Body() body: { orderId?: number; amountCents?: number }) {
     const orderId = body.orderId ?? Math.floor(Math.random() * 1000);
+    const amountCents = body.amountCents ?? 4200;
 
-    this.logger.info('order received', { orderId, amountCents: body.amountCents });
-    this.logger.info('order persisted', { orderId, table: 'orders' });
+    this.logger.info('order received', { orderId, amountCents });
+
+    await this.events.orderCreated(orderId, amountCents);
+    this.logger.info('order.created sent to Kafka', { orderId });
 
     return { orderId, status: 'created', requestId: this.cls.getId() };
   }

@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { ORDER_CREATED_TOPIC } from '@app/common';
 import { SERVICE_NAME } from './constants';
 
 @Controller()
@@ -7,12 +8,9 @@ export class AppController {
   info() {
     return {
       service: SERVICE_NAME,
-      role: 'Consumes order.created from Kafka and calls the (fake) payment provider.',
+      role: 'Reads order.created from Kafka and charges the order (fake).',
+      consumes: ORDER_CREATED_TOPIC,
       endpoints: ['GET /', 'GET /health/live', 'GET /health/ready'],
-      wiredUpIn: {
-        kafkaConsumer: 'step 4',
-        traceContextFromKafkaHeaders: 'step 4 — the hard part',
-      },
     };
   }
 }

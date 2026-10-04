@@ -34,7 +34,7 @@ storage:
 
 # Makes metrics from traces, and sends them to Prometheus:
 #   - span-metrics: how many requests, how many errors, how long
-#   - service-graphs: a map of which service calls which (step 4)
+#   - service-graphs: a map of which service calls which
 metrics_generator:
   registry:
     external_labels:

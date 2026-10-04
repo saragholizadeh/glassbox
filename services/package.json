@@ -34,6 +34,7 @@
     "@opentelemetry/resources": "^2.11.0",
     "@opentelemetry/sdk-node": "^0.222.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
+    "kafkajs": "^2.2.4",
     "nest-winston": "^1.10.2",
     "nestjs-cls": "^5.4.3",
     "nestjs-pino": "^4.6.1",
