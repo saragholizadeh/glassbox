@@ -4,18 +4,15 @@ import type { Logger } from 'winston';
 import type { NextFunction, Request, Response } from 'express';
 
 /**
- * One log line per finished HTTP request.
- *
- * `nestjs-pino` ships this behaviour (as pino-http) and you never see it.
- * Winston has no equivalent, so here it is written out — which is a good way
- * to see exactly what that "free" feature was actually doing.
+ * Writes one log line per HTTP request, for Winston.
+ * Pino does this by itself; Winston does not.
  */
 @Injectable()
 export class HttpLoggerMiddleware implements NestMiddleware {
   constructor(@Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger) {}
 
   use(req: Request, res: Response, next: NextFunction): void {
-    // Same rule as the Pino side: health probes run forever and say nothing.
+    // Skip health checks.
     if (req.originalUrl.startsWith('/health')) {
       next();
       return;
@@ -23,8 +20,7 @@ export class HttpLoggerMiddleware implements NestMiddleware {
 
     const startedAt = process.hrtime.bigint();
 
-    // 'finish' fires once the response has been fully sent, which is the only
-    // moment the status code and duration are both known.
+    // 'finish' runs when the response is sent. Now we know status and time.
     res.once('finish', () => {
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
 

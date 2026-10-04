@@ -1,11 +1,9 @@
--- Runs once, the first time the Postgres volume is created.
--- (If you change this file later, run `npm run infra:reset` to see the effect.)
+-- Runs only once, when Postgres starts for the first time.
+-- (After changing this file, run `npm run reset`.)
 --
--- Two separate databases on purpose: each service owns its own data and
--- neither can read the other's tables. That is what makes them real services
--- rather than one app split across three processes.
+-- One database per service. A service must not read another service's tables.
 
 CREATE DATABASE orders;
 CREATE DATABASE payments;
 
--- Tables come in step 4, together with the N+1 query bug (case study 02).
+-- Tables come in step 4.

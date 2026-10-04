@@ -9,12 +9,10 @@ export class HealthController {
   ) {}
 
   /**
-   * Liveness — "is this process alive?"
+   * "Is the app alive?" If this fails, the app is restarted.
    *
-   * An orchestrator restarts the container when this fails, so it must never
-   * check a dependency. If Postgres is slow and you check it here, every
-   * instance gets killed at the same moment and you turn a slow database into
-   * a total outage.
+   * Never check the database here. If the database is slow, every app
+   * would restart at the same time.
    */
   @Get('live')
   live() {
@@ -25,12 +23,8 @@ export class HealthController {
   }
 
   /**
-   * Readiness — "should traffic be sent here?"
-   *
-   * This one may check dependencies. Failing it pulls the instance out of the
-   * load balancer without killing it, so it can recover on its own.
-   *
-   * Step 4 adds Postgres, Redis and Kafka indicators to this list.
+   * "Can the app take traffic?" If this fails, traffic stops but the app
+   * keeps running. Checking dependencies here is fine.
    */
   @Get('ready')
   @HealthCheck()

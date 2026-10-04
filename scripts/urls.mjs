@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Printed after `npm run up`, so the URLs are in front of you. */
+/** Shows the useful URLs after `npm run up`. */
 
 const DIM = '\x1b[2m';
 const BOLD = '\x1b[1m';

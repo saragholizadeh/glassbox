@@ -1,16 +1,10 @@
 #!/usr/bin/env node
 /**
- * Pino vs Winston, measured rather than assumed.
+ * Pino vs Winston: which is faster?
  *
- * Run with:  node scripts/bench-loggers.mjs
+ * Run with:  npm run bench:loggers
  *
- * Both loggers are given the same job: write N structured lines, each with a
- * message and a small object of fields, as JSON, to a file on disk. Neither
- * gets pretty-printing — that is a development convenience and would only
- * measure the prettifier.
- *
- * Disk is the same for both, so what we are really comparing is how much work
- * each library does per line before the bytes reach the operating system.
+ * Both write the same JSON lines to a file. No colors, no terminal output.
  */
 
 import fs from 'node:fs';
@@ -22,16 +16,12 @@ import winston from 'winston';
 
 const LINES = Number(process.env.BENCH_LINES ?? 200_000);
 
-/**
- * Untimed lines written first, so neither logger pays for the JIT warming up
- * inside the measured run. Without this the logger that goes first looks
- * slower than it is.
- */
+/** Lines written first, without timing, so Node can "warm up". Makes the test fair. */
 const WARMUP = Math.min(20_000, Math.floor(LINES / 10));
 
 const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'glassbox-bench-'));
 
-/** The payload every line carries — representative, not trivially small. */
+/** The data on every line. */
 function payload(i) {
   return {
     orderId: i,
@@ -91,12 +81,8 @@ async function benchWinston() {
     logger.info('order processed', payload(i));
   }
 
-  // The timer must stop AFTER the bytes are actually on disk, not after the
-  // calls are merely accepted. Winston's file transport queues asynchronously,
-  // so stopping the clock before this await measures nothing but how fast it
-  // can push objects onto a queue — and makes it look several times faster
-  // than it is. Pino is flushed the same way below, so both are measured
-  // door-to-door.
+  // Stop the timer only after everything is written to disk.
+  // If we stop earlier, Winston looks much faster than it really is.
   await new Promise((resolve) => {
     logger.on('finish', resolve);
     logger.end();

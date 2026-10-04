@@ -1,13 +1,8 @@
 /**
- * Field names that must never reach a log file.
+ * Field names that must never be written to a log file.
+ * Their values are replaced with "[Redacted]".
  *
- * Logs get copied, shipped elsewhere, kept for months, and read by people who
- * were never meant to see a customer's password. Both loggers replace these
- * values with "[Redacted]" before anything is written, so the secret never
- * exists in the output.
- *
- * Add new names here only. The Pino paths below are generated from this list,
- * so the two loggers can never drift apart.
+ * Add new names here only. The Pino list below is made from this one.
  */
 export const SECRET_FIELDS = [
   'authorization',
@@ -26,15 +21,12 @@ export const SECRET_FIELDS = [
 
 export const CENSOR = '[Redacted]';
 
-/** Lowercased, for Winston's by-hand matching. Headers arrive in any case. */
+/** Lowercase version, for Winston. Headers can come in any case. */
 export const SECRET_FIELDS_LOWER = new Set(
   SECRET_FIELDS.map((field) => field.toLowerCase()),
 );
 
-/**
- * The same rule in Pino's path syntax: `*` matches one level, and names with
- * dashes need bracket-and-quote form.
- */
+/** The same list in Pino's path format. `*` means "any object". */
 export const REDACTED_PATHS = SECRET_FIELDS.flatMap((field) => [
   `*.${field}`,
   `req.headers["${field}"]`,

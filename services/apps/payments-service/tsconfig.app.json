@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "declaration": false,
-    // See apps/api-gateway/tsconfig.app.json for why this is a shared dist.
+    // All apps build into one shared dist folder.
     "outDir": "../../dist"
   },
   "include": ["src/**/*", "../../libs/**/*"],

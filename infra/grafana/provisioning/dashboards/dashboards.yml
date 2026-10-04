@@ -1,5 +1,5 @@
-# Any dashboard JSON dropped into infra/grafana/dashboards/ is picked up
-# automatically on restart. Step 5 fills that folder.
+# Grafana loads every dashboard file in infra/grafana/dashboards/.
+# Step 5 adds them.
 
 apiVersion: 1
 

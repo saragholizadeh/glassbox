@@ -1,12 +1,8 @@
-# Grafana datasources, provisioned automatically on startup.
+# Grafana's data sources. Loaded on startup.
 #
-# The interesting part is not the three URLs — it is the links between them:
-#
-#   Tempo -> Loki   (tracesToLogsV2)  click a slow span, see that request's logs
-#   Loki  -> Tempo  (derivedFields)   click a log line's trace id, see the trace
-#
-# That round trip is the whole payoff of steps 2 and 3. It is configured here
-# so it already works the moment the first trace arrives.
+# The links between them are the useful part:
+#   Tempo → Loki: click a span, see its logs
+#   Loki → Tempo: click a trace_id in a log, see the trace
 
 apiVersion: 1
 
@@ -20,8 +16,7 @@ datasources:
     jsonData:
       httpMethod: POST
       timeInterval: 15s
-      # Lets a metric point carry a trace id, so you can jump from a spike on
-      # a latency graph straight into one slow trace. Step 5 uses this.
+      # From a point on a graph, jump to a trace. Used in step 5.
       exemplarTraceIdDestinations:
         - name: trace_id
           datasourceUid: tempo
@@ -39,9 +34,8 @@ datasources:
         filterByTraceID: false
         filterBySpanID: false
         customQuery: true
-        # NOTE the doubled $$. Grafana expands ${...} in provisioning files as
-        # environment variables, so a single $ silently turns these into empty
-        # strings and the link stops working. $$ escapes it to a literal $.
+        # Use $$, not $. With one $, Grafana treats it as an env variable,
+        # makes it empty, and the link breaks with no error.
         query: '{service_name="$${__span.tags["service.name"]}"} | trace_id="$${__span.traceId}"'
       tracesToMetrics:
         datasourceUid: prometheus
@@ -64,11 +58,11 @@ datasources:
     jsonData:
       maxLines: 1000
       derivedFields:
-        # Turns the trace_id on every log line into a clickable link.
+        # Makes trace_id in a log line a clickable link to the trace.
         - name: TraceID
           matcherType: label
           matcherRegex: trace_id
-          # Doubled $$ for the same reason as the Tempo query above.
+          # $$ again — see above.
           url: '$${__value.raw}'
           datasourceUid: tempo
           urlDisplayLabel: 'View trace'

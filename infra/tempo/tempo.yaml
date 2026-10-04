@@ -1,7 +1,7 @@
 # Tempo — stores traces.
 #
-# Single-binary mode with local disk storage. Fine for a laptop, not for
-# production (there you would point `storage.trace.backend` at S3/GCS).
+# Saves traces on local disk. Fine for a laptop.
+# In production you would use cloud storage like S3.
 
 stream_over_http_enabled: true
 
@@ -17,8 +17,7 @@ distributor:
           endpoint: 0.0.0.0:4317
 
 ingester:
-  # Flush blocks quickly so a trace shows up in Grafana within seconds
-  # instead of minutes. Only sensible because this is a dev setup.
+  # Save traces quickly, so they show up in Grafana fast.
   max_block_duration: 5m
 
 compactor:
@@ -33,9 +32,9 @@ storage:
     local:
       path: /var/tempo/blocks
 
-# Turns traces into metrics automatically:
-#   - span-metrics  -> request rate / error rate / duration per span, for free
-#   - service-graphs -> the "who calls who" map you will see in step 4
+# Makes metrics from traces, and sends them to Prometheus:
+#   - span-metrics: how many requests, how many errors, how long
+#   - service-graphs: a map of which service calls which (step 4)
 metrics_generator:
   registry:
     external_labels:

@@ -22,10 +22,7 @@ export class AppController {
     };
   }
 
-  /**
-   * Called by api-gateway from step 4 onwards. For now it just logs, so the
-   * Winston output can be compared against the gateway's Pino output.
-   */
+  /** From step 4, api-gateway calls this. For now it only writes logs. */
   @Post('orders')
   create() {
     const orderId = Math.floor(Math.random() * 1000);

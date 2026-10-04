@@ -1,10 +1,7 @@
 {
   "compilerOptions": {
-    // CommonJS on purpose, not ESM.
-    //
-    // OpenTelemetry's automatic instrumentation works by patching `require()`.
-    // If you switch this to ESM, OTel stops producing spans and gives you no
-    // error at all. See ../docs/step-03-tracing.md before changing it.
+    // Keep CommonJS. OpenTelemetry needs it to trace your app.
+    // With ESM you get no traces and no error.
     "module": "commonjs",
     "moduleResolution": "node",
     "target": "ES2023",

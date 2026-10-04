@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
  * `npm run setup` — create .env if it does not exist yet.
- *
- * A tiny node script rather than `cp`, so this works on Windows too.
+ * Written in Node instead of `cp`, so it works on Windows too.
  */
 
 import { copyFileSync, existsSync } from 'node:fs';

@@ -1,11 +1,4 @@
-/**
- * The identity a service reports about itself.
- *
- * `name` matters more than it looks: in step 3 it becomes the OpenTelemetry
- * `service.name` resource attribute, which is how Tempo, Prometheus and Loki
- * all decide which service a piece of telemetry came from. Keep these three
- * names stable and identical everywhere.
- */
+/** Basic facts a service knows about itself. */
 export interface ServiceInfo {
   name: string;
   version: string;
@@ -13,6 +6,10 @@ export interface ServiceInfo {
   env: string;
 }
 
+/**
+ * Reads the service's port from the environment, e.g. ORDERS_SERVICE_PORT,
+ * or uses the default.
+ */
 export function readServiceInfo(name: string, defaultPort: number): ServiceInfo {
   const portVar = `${name.toUpperCase().replace(/-/g, '_')}_PORT`;
 

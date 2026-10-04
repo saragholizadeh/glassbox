@@ -5,12 +5,7 @@ import winston from 'winston';
 import { CENSOR, SECRET_FIELDS_LOWER } from './redaction';
 import { logDirectory } from './pino-options';
 
-/**
- * Walks a log object and censors anything whose key looks like a secret.
- *
- * Pino does this internally in C-like fast paths. Here we do it in plain
- * JavaScript on every single log line — one of the reasons Winston costs more.
- */
+/** Replaces secret values with "[Redacted]", also inside nested objects. */
 function deepRedact(value: unknown, depth = 0): unknown {
   if (depth > 6 || value === null || typeof value !== 'object') return value;
 
@@ -28,21 +23,14 @@ function deepRedact(value: unknown, depth = 0): unknown {
 }
 
 /**
- * A Winston "format": a function that receives the record and returns it.
+ * Winston has no redaction, so we do it ourselves.
  *
- * Note that this edits the top-level object **in place** and returns the same
- * reference, rather than building a clean copy. That is deliberate and easy to
- * get wrong: Winston keeps the log's level and rendered message in hidden
- * `Symbol` keys, and `Object.entries` does not see symbols. Returning a rebuilt
- * object silently drops them, and the colouriser then crashes with a confusing
- * `colors[...] is not a function`.
- *
- * Nested values are still replaced with redacted copies, so the caller's own
- * objects are never modified.
+ * We change the log object in place. Do not return a new object: Winston
+ * keeps the level in hidden Symbol keys, and a copy loses them.
  */
 const redactFormat = winston.format((info) => {
-  for (const key of Object.keys(info)) {
-    const record = info as unknown as Record<string, unknown>;
+  const record = info as unknown as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
     record[key] = SECRET_FIELDS_LOWER.has(key.toLowerCase())
       ? CENSOR
       : deepRedact(record[key], 1);
@@ -50,30 +38,22 @@ const redactFormat = winston.format((info) => {
   return info;
 });
 
-/**
- * The Winston equivalent of Pino's `mixin` — reads the request id back out of
- * AsyncLocalStorage and attaches it to the line.
- */
+/** Adds the request id to the line. Same job as Pino's `mixin`. */
 const requestIdFormat = winston.format((info) => {
   try {
     const reqId = ClsServiceManager.getClsService()?.getId();
     if (reqId) info.req_id = reqId;
   } catch {
-    // Outside a request (startup). Nothing to attach.
+    // At startup there is no request, so no id.
   }
   return info;
 });
 
 /**
- * Forces Winston's field names to match Pino's.
- *
- * Winston writes `message` and `timestamp`; Pino writes `msg` and `time`. If
- * we left that alone you would need two different Loki queries depending on
- * which service you were looking at. Normalising here means one query works
- * for both.
+ * Renames Winston's fields to match Pino's: message → msg, timestamp → time.
+ * Then one Loki query works for all services.
  */
-const normaliseFormat = winston.format((info) => {
-  // In place again, for the same Symbol reason as redactFormat above.
+const renameFormat = winston.format((info) => {
   const record = info as unknown as Record<string, unknown>;
   record.time = record.timestamp;
   record.msg = record.message;
@@ -82,16 +62,18 @@ const normaliseFormat = winston.format((info) => {
   return info;
 });
 
+/** Winston settings for one service. */
 export function buildWinstonOptions(serviceName: string): winston.LoggerOptions {
   const level = process.env.LOG_LEVEL ?? 'info';
   const pretty = process.env.LOG_PRETTY !== 'false';
   const dir = logDirectory();
   const logFile = path.join(dir, `${serviceName}.log`);
 
-  // Winston's File transport will not create a missing directory.
+  // Winston does not create the folder by itself.
   mkdirSync(dir, { recursive: true });
 
   const transports: winston.transport[] = [
+    // The JSON file.
     new winston.transports.File({
       filename: logFile,
       level,
@@ -99,13 +81,14 @@ export function buildWinstonOptions(serviceName: string): winston.LoggerOptions 
         winston.format.timestamp(),
         requestIdFormat(),
         redactFormat(),
-        normaliseFormat(),
+        renameFormat(),
         winston.format.json(),
       ),
     }),
   ];
 
   if (pretty) {
+    // The colored terminal output.
     transports.push(
       new winston.transports.Console({
         level,
@@ -128,7 +111,7 @@ export function buildWinstonOptions(serviceName: string): winston.LoggerOptions 
 
   return {
     level,
-    // Stamped on every line, same three fields Pino's `base` adds.
+    // Added to every line, same as Pino's `base`.
     defaultMeta: {
       service: serviceName,
       env: process.env.NODE_ENV ?? 'development',

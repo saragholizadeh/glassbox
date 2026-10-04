@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 /**
- * `npm run check` — is the stack actually up?
+ * `npm run check` — does every tool and app answer?
  *
- * Containers reporting "running" is not the same as "working". This pokes each
- * one at the address your services will really use and prints a table.
+ * "Running" in Docker does not mean "working", so we call each one.
  */
 
 import net from 'node:net';
@@ -67,12 +66,8 @@ const GROUP_LABELS = {
 const probe = (t) => (t.kind === 'tcp' ? checkTcp(t) : checkHttp(t));
 
 /**
- * Keep retrying until everything required is up, or we give up.
- *
- * Nothing here is instant. Kafka takes ~20s to elect itself leader, and Tempo
- * and Loki answer 503 for their first half-minute while their internal rings
- * form. A single pass right after `npm run up` reports failures that fix
- * themselves, which teaches you to distrust your own tooling.
+ * Try again until everything answers, or time runs out.
+ * Kafka, Tempo and Loki need up to 30 seconds to start.
  */
 const WAIT_SECONDS = Number(process.env.CHECK_WAIT ?? 90);
 const deadline = Date.now() + WAIT_SECONDS * 1000;

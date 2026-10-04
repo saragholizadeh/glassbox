@@ -10,8 +10,7 @@ import { SERVICE_NAME } from './constants';
       isGlobal: true,
       envFilePath: ['../.env', '.env'],
     }),
-    // The odd one out, on purpose. Same output shape as the other two, built
-    // from a different library, so the two can be compared honestly.
+    // Winston here, Pino in the other two, so we can compare them.
     LoggingModule.forRoot({ serviceName: SERVICE_NAME, driver: 'winston' }),
     HealthModule,
   ],

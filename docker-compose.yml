@@ -1,8 +1,7 @@
-# glassbox — local infrastructure.
+# All the tools, in Docker.
 #
-# The three NestJS services are NOT in here. They run on your host with
-# `npm run dev` so you keep hot reload and a debugger. Everything they talk to
-# runs in Docker.
+# The three NestJS apps are NOT here. They run on your machine with
+# `npm run dev`, so you keep hot reload and a debugger.
 #
 #   docker compose up -d      start everything
 #   docker compose ps         see what is healthy
@@ -27,11 +26,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      # -d matters. Without it, pg_isready asks for a database named after the
-      # user ("glassbox"), which does not exist, and Postgres logs
-      # `FATAL: database "glassbox" does not exist` every 5 seconds forever.
-      # The check still passes — it only asks "did the server answer?" — so you
-      # get a healthy container and a log full of scary words.
+      # Keep -d postgres. Without it, Postgres logs
+      # 'FATAL: database "glassbox" does not exist' every 5 seconds.
       test: ['CMD-SHELL', 'pg_isready -U glassbox -d postgres']
       interval: 5s
       timeout: 3s
@@ -51,13 +47,13 @@ services:
 
   # --------------------------------------------------------------- kafka ----
 
-  # KRaft mode: Kafka is its own controller, no Zookeeper needed.
+  # Modern Kafka: no Zookeeper needed.
   kafka:
     image: apache/kafka:3.9.0
     container_name: glassbox-kafka
     ports:
-      # 9092 is for containers talking to Kafka (host: kafka).
-      # 29092 is for your services running on the host (host: localhost).
+      # 9092: for other containers (address kafka:9092)
+      # 29092: for your apps on your machine (address localhost:29092)
       - '29092:29092'
     environment:
       KAFKA_NODE_ID: 1
@@ -85,8 +81,7 @@ services:
       retries: 15
       start_period: 20s
 
-  # Lets you SEE the messages — including their headers. In step 4 this is how
-  # you confirm the `traceparent` header actually made it onto the message.
+  # A web page to see Kafka messages and their headers. Used in step 4.
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: glassbox-kafka-ui
@@ -115,16 +110,13 @@ services:
       - '8889:8889' # /metrics page Prometheus scrapes
     volumes:
       - ./infra/otel-collector/config.yaml:/etc/otel/config.yaml:ro
-      # The services run on your host and write JSON here; the Collector tails
-      # it from inside the container. Read-only — it never writes to your logs.
+      # The apps write log files here. The Collector reads them.
       - ./logs:/var/log/glassbox:ro
     extra_hosts:
       - 'host.docker.internal:host-gateway'
 
-  # NOTE on `user: "0:0"` below — Tempo and Loki run as a non-root user, but a
-  # fresh Docker volume is owned by root, so they cannot write to it. Running
-  # them as root is the simplest fix for a laptop. Do not copy this into a
-  # production setup.
+  # user "0:0" runs Tempo and Loki as root, so they can write to their
+  # volumes. Fine on a laptop. Don't do this in production.
 
   tempo:
     image: grafana/tempo:2.7.0
@@ -155,7 +147,7 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=24h'
-      # Needed so Tempo's metrics generator can push span metrics in.
+      # Lets Tempo send metrics made from traces.
       - '--web.enable-remote-write-receiver'
       - '--enable-feature=exemplar-storage'
     ports:
@@ -176,7 +168,7 @@ services:
     ports:
       - '3000:3000'
     environment:
-      # Local only: no login screen, straight to the dashboards.
+      # No login. Only OK on your own machine.
       GF_AUTH_ANONYMOUS_ENABLED: 'true'
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_AUTH_DISABLE_LOGIN_FORM: 'true'

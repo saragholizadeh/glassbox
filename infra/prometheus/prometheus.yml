@@ -1,9 +1,7 @@
 # Prometheus — stores metrics.
 #
-# Prometheus PULLS. It reaches out and scrapes a /metrics page every few
-# seconds. Nothing pushes to it (except Tempo's metrics generator, which uses
-# remote-write — enabled by the --web.enable-remote-write-receiver flag in
-# docker-compose.yml).
+# Prometheus PULLS: every 15 seconds it reads a /metrics page from each target.
+# (Tempo is the one exception — it pushes to Prometheus.)
 
 global:
   scrape_interval: 15s
@@ -17,8 +15,7 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # Everything the services send via OTLP arrives here, because the Collector
-  # re-exposes it as a scrapeable page.
+  # Metrics that arrive at the Collector are read from here.
   - job_name: otel-collector
     static_configs:
       - targets: ['otel-collector:8889']
@@ -33,9 +30,8 @@ scrape_configs:
     static_configs:
       - targets: ['loki:3100']
 
-  # Step 5 adds the services' own /metrics endpoints here.
-  # They run on the host, not in Docker, so they are reachable at
-  # host.docker.internal — already mapped in docker-compose.yml.
+  # Step 5 adds the apps here. They run on your machine, so from Docker
+  # their address is host.docker.internal.
   #
   # - job_name: services
   #   static_configs:
