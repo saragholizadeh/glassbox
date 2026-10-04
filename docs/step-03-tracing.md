@@ -21,6 +21,10 @@ POST /checkout                 19.0 ms   ← automatic
 
 Here you can see that almost all the time is spent in `reserve stock`.
 
+This is the same trace in Grafana:
+
+![A POST /checkout trace in Grafana Tempo, with 4 spans](images/step-03-trace.png)
+
 ---
 
 ## What we added
