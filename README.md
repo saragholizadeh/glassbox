@@ -2,8 +2,8 @@
 
 **Watch a NestJS system the way you would in production.**
 
-Three small NestJS services talk over HTTP and Kafka. Every request leaves logs and a
-trace. Grafana shows it all in one place.
+Three small NestJS services talk over HTTP and Kafka. Every request leaves logs, a
+trace and metrics. Grafana shows it all in one place.
 
 Later the project will get **five performance bugs, added on purpose**. You find each
 one with the tools.
@@ -90,6 +90,17 @@ Click any span → **Logs for this span**. Or in Explore → **Loki**:
 Kafka UI (http://localhost:8080) → Topics → `order.created` → Messages. Open one
 message and look at its **headers**: there is a `traceparent`.
 
+**5. See the dashboard**
+
+Send some traffic for a minute:
+
+```bash
+for i in $(seq 100); do curl -s -o /dev/null -X POST localhost:3001/checkout; sleep 0.5; done
+```
+
+Grafana → **Dashboards** → Glassbox → **Glassbox — Services**. You see requests per
+second, status codes, latency, event loop delay, Kafka messages and memory.
+
 ---
 
 ## How it works
@@ -109,6 +120,10 @@ header into the message. The next service reads it and continues the trace.
 traceparent: 00-43ffd1b608e7117deab953434832c154-a1b2c3d4e5f60718-01
                 └──────── trace id ────────────┘ └─ parent span ─┘
 ```
+
+**Metrics.** Numbers over time, like "requests per second". OTel makes most of them by
+itself: HTTP, Kafka, event loop, memory. We made one by hand: `payments_processed_total`.
+The apps send metrics to the Collector every 10 s. Prometheus reads them from there.
 
 **Pino vs Winston.** orders-service uses Winston, the others use Pino. Same JSON
 shape. Pino is about 2× faster (`npm run bench:loggers`).
@@ -139,7 +154,7 @@ shape. Pino is about 2× faster (`npm run bench:loggers`).
 - [x] **02 Logs** — JSON logs, Pino vs Winston, logs in Loki
 - [x] **03 Traces** — OpenTelemetry, first trace, trace ↔ logs links
 - [x] **04 Connect** — gateway → orders (HTTP) → payments (Kafka), one trace
-- [ ] **05 Metrics** — request rate, errors, latency, a Grafana dashboard
+- [x] **05 Metrics** — request rate, errors, latency, a Grafana dashboard
 - [ ] **06 Load** — k6 sends fake traffic
 - [ ] **07 Bugs** — save orders in Postgres, use Redis, then add the five bugs
 - [ ] **08 Profiling** — see which function uses the CPU
@@ -156,7 +171,7 @@ shape. Pino is about 2× faster (`npm run bench:loggers`).
 
 ## Two traps
 
-**OTel must start first.** `import './tracing'` is the first line of every `main.ts`.
+**OTel must start first.** `import './otel'` is the first line of every `main.ts`.
 If something is imported before it, you get no traces and no error.
 
 **Keep CommonJS.** OTel works by patching `require()`. With ESM it quietly stops
@@ -170,8 +185,9 @@ working.
 glassbox/
 ├── services/            NestJS monorepo
 │   ├── apps/            api-gateway, orders-service, payments-service
-│   └── libs/common/     health, logging, tracing, kafka
+│   └── libs/common/     health, logging, otel, kafka
 ├── infra/               config for every container
+│   └── grafana/dashboards/   the dashboard (JSON)
 ├── postman/             all endpoints
 └── docker-compose.yml
 ```

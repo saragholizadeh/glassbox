@@ -1,11 +1,17 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { trace } from '@opentelemetry/api';
+import { metrics, trace } from '@opentelemetry/api';
 import type { KafkaMessage } from 'kafkajs';
 import { createKafka, ORDER_CREATED_TOPIC } from '@app/common';
 import { SERVICE_NAME } from './constants';
 
 const tracer = trace.getTracer(SERVICE_NAME);
+
+// Our own metric. A counter only goes up. In Prometheus it is
+// called payments_processed_total.
+const paymentsProcessed = metrics
+  .getMeter(SERVICE_NAME)
+  .createCounter('payments.processed', { description: 'Payments charged' });
 
 /**
  * Reads order.created events from Kafka and charges the order.
@@ -56,6 +62,7 @@ export class PaymentsConsumer implements OnModuleInit, OnModuleDestroy {
       span.end();
     });
 
+    paymentsProcessed.add(1);
     this.logger.info({ orderId }, 'payment done');
   }
 }

@@ -29,7 +29,7 @@ export class AppController {
    * through Kafka, and answer right away. We don't wait for the payment.
    */
   @Post('orders')
-  async create(@Body() body: { orderId?: number; amountCents?: number }) {
+  async create(@Body() body: { orderId?: number; amountCents?: number } = {}) {
     const orderId = body.orderId ?? Math.floor(Math.random() * 1000);
     const amountCents = body.amountCents ?? 4200;
 

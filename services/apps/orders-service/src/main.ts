@@ -1,5 +1,5 @@
-// Must stay the first import. See tracing.ts.
-import './tracing';
+// Must stay the first import. See otel.ts.
+import './otel';
 
 import { NestFactory } from '@nestjs/core';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';

@@ -1,6 +1,8 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { ExpressLayerType } from '@opentelemetry/instrumentation-express';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import {
@@ -9,13 +11,13 @@ import {
 } from '@opentelemetry/semantic-conventions';
 
 /**
- * Starts OpenTelemetry for one service.
+ * Starts OpenTelemetry (traces and metrics) for one service.
  *
  * It must run before Nest is loaded. If Nest loads first, you get no spans
  * and no error. So: import only OTel packages here, and import this file on
  * the first line of main.ts.
  */
-export function startTracing(serviceName: string): void {
+export function startOtel(serviceName: string): void {
   const sdk = new NodeSDK({
     // The name you see in Grafana.
     resource: resourceFromAttributes({
@@ -25,6 +27,15 @@ export function startTracing(serviceName: string): void {
 
     // Sends spans to the OTel Collector at localhost:4318.
     traceExporter: new OTLPTraceExporter(),
+
+    // Sends metrics to the OTel Collector every 10 seconds.
+    // (The default is 60 seconds, too slow to watch a dashboard.)
+    metricReaders: [
+      new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter(),
+        exportIntervalMillis: 10_000,
+      }),
+    ],
 
     instrumentations: [
       getNodeAutoInstrumentations({

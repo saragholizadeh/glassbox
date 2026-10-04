@@ -1,5 +1,4 @@
 # Grafana loads every dashboard file in infra/grafana/dashboards/.
-# Step 5 adds them.
 
 apiVersion: 1
 

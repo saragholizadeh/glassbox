@@ -81,7 +81,7 @@ services:
       retries: 15
       start_period: 20s
 
-  # A web page to see Kafka messages and their headers. Used in step 4.
+  # A web page to see Kafka messages and their headers.
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: glassbox-kafka-ui

@@ -1,11 +1,11 @@
 # OpenTelemetry Collector — the "post office".
 #
-# Services send traces here. The Collector also reads the log files.
+# Services send traces and metrics here. The Collector also reads the log files.
 # Then it sends each kind of data to the right storage:
 #   traces → Tempo, metrics → Prometheus, logs → Loki
 
 receivers:
-  # Services send traces here (port 4318 over HTTP, 4317 over gRPC).
+  # Services send traces and metrics here (port 4318 over HTTP, 4317 over gRPC).
   otlp:
     protocols:
       grpc:
@@ -51,6 +51,14 @@ processors:
         value: local
         action: upsert
 
+  # Metrics only: remove process.* and host.* info (like process.pid).
+  # Every resource attribute becomes a label in Prometheus, and the pid
+  # changes on every restart. That makes new series again and again.
+  resource/drop-process:
+    attributes:
+      - pattern: ^(process|host)\..*
+        action: delete
+
   # Sends data in groups instead of one by one. Always last.
   batch:
     timeout: 1s
@@ -86,7 +94,7 @@ service:
 
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
+      processors: [memory_limiter, resource, resource/drop-process, batch]
       exporters: [prometheus]
 
     logs:

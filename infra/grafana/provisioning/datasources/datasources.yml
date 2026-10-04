@@ -16,7 +16,7 @@ datasources:
     jsonData:
       httpMethod: POST
       timeInterval: 15s
-      # From a point on a graph, jump to a trace. Used in step 5.
+      # From a dot on a graph (an "exemplar"), jump to its trace.
       exemplarTraceIdDestinations:
         - name: trace_id
           datasourceUid: tempo

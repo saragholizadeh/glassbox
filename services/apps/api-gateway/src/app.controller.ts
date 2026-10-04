@@ -26,7 +26,7 @@ export class AppController {
 
   /** The main request of the project: reserve stock, then create the order. */
   @Post('checkout')
-  async checkoutOrder(@Body() body: { orderId?: number; amountCents?: number }) {
+  async checkoutOrder(@Body() body: { orderId?: number; amountCents?: number } = {}) {
     const orderId = body.orderId ?? 99;
     const amountCents = body.amountCents ?? 4200;
 
