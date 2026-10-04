@@ -1,6 +1,7 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { ExpressLayerType } from '@opentelemetry/instrumentation-express';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import {
   ATTR_SERVICE_NAME,
@@ -36,6 +37,18 @@ export function startTracing(serviceName: string): void {
         '@opentelemetry/instrumentation-fs': { enabled: false },
         '@opentelemetry/instrumentation-dns': { enabled: false },
         '@opentelemetry/instrumentation-net': { enabled: false },
+
+        // Express: no span for every middleware (too noisy), but keep it on,
+        // because it adds the route name: "POST /checkout" instead of "POST".
+        '@opentelemetry/instrumentation-express': {
+          ignoreLayersType: [
+            ExpressLayerType.MIDDLEWARE,
+            ExpressLayerType.REQUEST_HANDLER,
+            ExpressLayerType.ROUTER,
+          ],
+        },
+        // Express 5 also uses the "router" package. Same noise, so turn it off.
+        '@opentelemetry/instrumentation-router': { enabled: false },
 
         // Add trace_id to every log line. Logs still go to Loki through the
         // log files, so don't send them a second time.

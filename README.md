@@ -95,8 +95,8 @@ Each step works on its own, so the project is never half broken.
 |---|---|---|
 | 01 | Project skeleton, Docker, health checks | done |
 | 02 | JSON logs, request ids, Pino vs Winston | done |
-| 03 | OpenTelemetry — your first trace | next |
-| 04 | Connect the services — HTTP, then Kafka | |
+| 03 | OpenTelemetry — your first trace | done |
+| 04 | Connect the services — HTTP, then Kafka | next |
 | 05 | Metrics and dashboards | |
 | 06 | k6 — a tool that makes fake traffic | |
 | 07 | The five bugs, with a guide for each | |
@@ -142,7 +142,7 @@ glassbox/
 │   │   ├── api-gateway/
 │   │   ├── orders-service/
 │   │   └── payments-service/
-│   └── libs/common/       # health checks, logging
+│   └── libs/common/       # health checks, logging, tracing
 ├── infra/                 # config for every container
 ├── docs/                  # one guide per step
 ├── postman/               # all endpoints, ready to import
@@ -154,9 +154,9 @@ glassbox/
 
 ## Two traps worth knowing
 
-**OpenTelemetry must start before NestJS.** From step 3 the services start with
-`node --require ./dist/tracing.js`, not with an import at the top of `main.ts`. If you
-get this wrong, OTel makes no traces and shows **no error** — only silence.
+**OpenTelemetry must start before NestJS.** That is why `import './tracing'` is the
+**first line** of every `main.ts`. If anything is imported before it, OTel makes no
+traces and shows **no error** — only silence.
 
 **Keep CommonJS.** `services/tsconfig.json` sets `"module": "commonjs"` on purpose.
 OTel's automatic instrumentation works by patching `require()`. Switching to ESM
@@ -168,6 +168,7 @@ breaks it quietly.
 
 - [Step 01 — skeleton and infrastructure](docs/step-01-skeleton.md)
 - [Step 02 — structured logging](docs/step-02-logging.md)
+- [Step 03 — tracing with OpenTelemetry](docs/step-03-tracing.md)
 
 ## License
 
