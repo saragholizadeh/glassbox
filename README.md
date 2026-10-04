@@ -92,7 +92,7 @@ message and look at its **headers**: there is a `traceparent`.
 
 ---
 
-## How it works (short)
+## How it works
 
 **Logs.** Every service writes JSON lines to `logs/*.log`. The OTel Collector reads
 the files and sends them to Loki. Every line has a `trace_id`.
