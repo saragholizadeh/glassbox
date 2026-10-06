@@ -19,14 +19,16 @@ flowchart LR
     GW[api-gateway] -->|HTTP| OR[orders-service]
     OR -->|order.created| KF{{Kafka}}
     KF --> PAY[payments-service]
-    OR -.->|later| PG[(Postgres)]
-    OR -.->|later| RD[(Redis)]
+    OR --> PG[(Postgres)]
+    OR --> RD[(Redis)]
 ```
 
 1. `POST /checkout` comes into **api-gateway**. It reserves stock.
 2. The gateway calls **orders-service** over HTTP.
-3. orders-service sends an `order.created` message to **Kafka** and answers right away.
-4. **payments-service** reads the message and charges the order (fake).
+3. orders-service reads the products (from **Redis**, or **Postgres** if Redis doesn't
+   have them) and saves the order in **Postgres**.
+4. orders-service sends an `order.created` message to **Kafka** and answers right away.
+5. **payments-service** reads the message and charges the order (fake).
 
 All of this is **one trace**, from the first request to the payment.
 
@@ -55,7 +57,7 @@ Postman: import [`postman/glassbox.postman_collection.json`](postman/glassbox.po
 **1. Make a checkout**
 
 ```bash
-curl -X POST localhost:3001/checkout -H 'content-type: application/json' -d '{"orderId":1}'
+curl -X POST localhost:3001/checkout -H 'content-type: application/json' -d '{"items":[{"productId":3,"quantity":2}]}'
 ```
 
 The answer has a `traceId`. Copy it.
@@ -72,6 +74,8 @@ api-gateway       POST /checkout
   api-gateway       reserve stock          ← our own span
   api-gateway       POST                   ← gateway calls orders
     orders-service    POST /orders
+      orders-service    get                  ← Redis: products in the cache?
+      orders-service    pg.query:INSERT      ← Postgres: save the order
       orders-service    send order.created   ← into Kafka
         payments-service  process order.created   ← out of Kafka
           payments-service  charge card
@@ -146,7 +150,8 @@ shape. Pino is about 2× faster (`npm run bench:loggers`).
 | Prometheus | http://localhost:9090 | Stores metrics |
 | OTel Collector | localhost:4317 / 4318 | Gets all data first, sends it on |
 | Kafka | localhost:29092 | Message queue |
-| Postgres / Redis | localhost:5432 / 6379 | Not used yet |
+| Postgres | localhost:5432 | Orders and products |
+| Redis | localhost:6379 | Cache for products |
 | api-gateway | http://localhost:3001 | On your machine, not in Docker |
 | orders-service | http://localhost:3002 | On your machine |
 | payments-service | http://localhost:3003 | On your machine |
@@ -161,7 +166,9 @@ shape. Pino is about 2× faster (`npm run bench:loggers`).
 - [x] **04 Connect** — gateway → orders (HTTP) → payments (Kafka), one trace
 - [x] **05 Metrics** — request rate, errors, latency, a Grafana dashboard
 - [x] **06 Load** — k6 sends fake traffic
-- [ ] **07 Bugs** — save orders in Postgres, use Redis, then add the five bugs
+- [ ] **07 Bugs**
+  - [x] orders saved in Postgres, products cached in Redis
+  - [ ] the five bugs, each one off by default
 - [ ] **08 Profiling** — see which function uses the CPU
 
 ### The five bugs (step 07)

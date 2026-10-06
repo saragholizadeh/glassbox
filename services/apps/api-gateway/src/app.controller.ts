@@ -2,7 +2,7 @@ import { Body, Controller, Get, Post } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ClsService } from 'nestjs-cls';
 import { trace } from '@opentelemetry/api';
-import { CheckoutService } from './checkout.service';
+import { CheckoutItem, CheckoutService } from './checkout.service';
 import { SERVICE_NAME } from './constants';
 
 @Controller()
@@ -26,16 +26,15 @@ export class AppController {
 
   /** The main request of the project: reserve stock, then create the order. */
   @Post('checkout')
-  async checkoutOrder(@Body() body: { orderId?: number; amountCents?: number } = {}) {
-    const orderId = body.orderId ?? 99;
-    const amountCents = body.amountCents ?? 4200;
+  async checkoutOrder(@Body() body: { items?: CheckoutItem[] } = {}) {
+    const items = body.items ?? [{ productId: 1, quantity: 1 }];
 
-    this.logger.info({ orderId, amountCents }, 'checkout started');
+    this.logger.info({ items: items.length }, 'checkout started');
 
-    await this.checkout.reserve(orderId, amountCents);
-    const order = await this.checkout.createOrder(orderId, amountCents);
+    await this.checkout.reserve(items);
+    const order = await this.checkout.createOrder(items);
 
-    this.logger.info({ orderId }, 'checkout finished');
+    this.logger.info({ orderId: order.orderId }, 'checkout finished');
 
     return {
       ...order,

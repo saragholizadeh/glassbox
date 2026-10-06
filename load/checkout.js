@@ -23,9 +23,14 @@ export const options = {
 
 // Each user runs this again and again.
 export default function () {
-  const orderId = Math.floor(Math.random() * 10000);
+  // 1 to 3 random products (ids 1 to 20).
+  const count = 1 + Math.floor(Math.random() * 3);
+  const items = [];
+  for (let i = 0; i < count; i++) {
+    items.push({ productId: 1 + Math.floor(Math.random() * 20), quantity: 1 });
+  }
 
-  const res = http.post(`${BASE_URL}/checkout`, JSON.stringify({ orderId }), {
+  const res = http.post(`${BASE_URL}/checkout`, JSON.stringify({ items }), {
     headers: { 'content-type': 'application/json' },
   });
 
