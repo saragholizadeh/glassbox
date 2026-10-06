@@ -179,6 +179,18 @@ services:
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
 
+  # ---------------------------------------------------------------- load ----
+
+  # Fake traffic. Not started by "npm run up". Run it with: npm run load
+  k6:
+    image: grafana/k6:1.0.0
+    container_name: glassbox-k6
+    profiles: ['load']
+    volumes:
+      - ./load:/scripts:ro
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
 volumes:
   postgres-data:
   kafka-data:

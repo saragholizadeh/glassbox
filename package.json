@@ -17,6 +17,7 @@
     "logs": "docker compose logs -f",
 
     "check": "node scripts/check.mjs",
+    "load": "docker compose run --rm k6 run /scripts/checkout.js",
     "bench:loggers": "npm --prefix services run bench:loggers",
 
     "dev": "npm --prefix services run dev",

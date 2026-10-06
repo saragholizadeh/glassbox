@@ -44,7 +44,7 @@ npm run dev       # start the three services
 ```
 
 Other commands: `npm run down` (stop), `npm run reset` (stop and delete all data),
-`npm run logs`, `npm run bench:loggers`.
+`npm run logs`, `npm run load`, `npm run bench:loggers`.
 
 Postman: import [`postman/glassbox.postman_collection.json`](postman/glassbox.postman_collection.json).
 
@@ -92,14 +92,19 @@ message and look at its **headers**: there is a `traceparent`.
 
 **5. See the dashboard**
 
-Send some traffic for a minute:
+Send fake traffic with k6 (runs in Docker, takes 2 minutes):
 
 ```bash
-for i in $(seq 100); do curl -s -o /dev/null -X POST localhost:3001/checkout; sleep 0.5; done
+npm run load
 ```
 
-Grafana → **Dashboards** → Glassbox → **Glassbox — Services**. You see requests per
-second, status codes, latency, event loop delay, Kafka messages and memory.
+20 fake users do checkouts at the same time. The script is
+[`load/checkout.js`](load/checkout.js). At the end, k6 prints a summary: how many
+requests, how fast (p95), how many errors.
+
+While it runs, open Grafana → **Dashboards** → Glassbox → **Glassbox — Services**. You
+see requests per second, status codes, latency, event loop delay, Kafka messages and
+memory.
 
 ---
 
@@ -155,7 +160,7 @@ shape. Pino is about 2× faster (`npm run bench:loggers`).
 - [x] **03 Traces** — OpenTelemetry, first trace, trace ↔ logs links
 - [x] **04 Connect** — gateway → orders (HTTP) → payments (Kafka), one trace
 - [x] **05 Metrics** — request rate, errors, latency, a Grafana dashboard
-- [ ] **06 Load** — k6 sends fake traffic
+- [x] **06 Load** — k6 sends fake traffic
 - [ ] **07 Bugs** — save orders in Postgres, use Redis, then add the five bugs
 - [ ] **08 Profiling** — see which function uses the CPU
 
@@ -188,6 +193,7 @@ glassbox/
 │   └── libs/common/     health, logging, otel, kafka
 ├── infra/               config for every container
 │   └── grafana/dashboards/   the dashboard (JSON)
+├── load/                k6 load test
 ├── postman/             all endpoints
 └── docker-compose.yml
 ```
