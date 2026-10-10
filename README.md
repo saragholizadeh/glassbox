@@ -168,18 +168,66 @@ shape. Pino is about 2× faster (`npm run bench:loggers`).
 - [x] **06 Load** — k6 sends fake traffic
 - [ ] **07 Bugs**
   - [x] orders saved in Postgres, products cached in Redis
-  - [ ] the five bugs, each one off by default
+  - [x] bug 1: blocked event loop
+  - [ ] bugs 2–5
 - [ ] **08 Profiling** — see which function uses the CPU
 
-### The five bugs (step 07)
-
-1. **Blocked event loop** — one slow sync call freezes every request.
-2. **N+1 queries** — 51 database calls instead of 2.
-3. **Request-scoped providers** — `Scope.REQUEST` makes Nest slow.
-4. **A broken trace** — the trace stops in the middle. Find where.
-5. **Too many metric labels** — a `userId` label takes Prometheus down.
-
 ---
+
+## Bug hunt
+
+The project has bugs **added on purpose**, so you can practise finding them. All are
+off by default.
+
+**How to play**
+
+1. Run `npm run load` with no bugs. Write down p95. (Healthy: about **120 ms**.)
+2. Turn a bug on in `.env`, for example `BUGS=event-loop`. Restart `npm run dev`.
+3. Run `npm run load` again. Something is worse.
+4. Find the cause with Grafana, **before** you open the answer.
+5. Set `BUGS=` back to empty and restart.
+
+| # | `BUGS=` | Status |
+|---|---|---|
+| 1 | `event-loop` | ready |
+| 2 | `n-plus-one` | coming |
+| 3 | `request-scope` | coming |
+| 4 | `broken-trace` | coming |
+| 5 | `labels` | coming |
+
+### Bug 1 — `event-loop`
+
+**Symptom:** checkout gets slow under load. k6 fails the p95 limit.
+
+**Hints:**
+- Dashboard → **Event loop delay**. What happens to `api-gateway`?
+- Time a request that does nothing: `curl -w "%{time_total}\n" localhost:3001/health/live`
+  during `npm run load`. Why is it slow?
+- Open a slow checkout trace. Is there time that **no span** explains?
+
+<details>
+<summary>Answer</summary>
+
+`receiptCode()` in `api-gateway/src/checkout.service.ts` uses `pbkdf2Sync`. A `Sync`
+function runs on the main thread. For about 40 ms, Node can do **nothing else**: no
+other request, not even `/health/live`.
+
+The fix is the async version, `pbkdf2`. It runs on a worker thread, so Node keeps
+serving other requests while it waits.
+
+What we measured (20 users):
+
+| | healthy | bug on |
+|---|---|---|
+| checkout p95 | 120 ms | 467 ms |
+| `/health/live` p50 | 1.3 ms | 41 ms |
+| `/health/live` max | 5 ms | 509 ms |
+| event loop delay (max p99) | 11 ms | 407 ms |
+
+**The lesson:** waiting (`await`) is fine. Blocking (`...Sync`, big loops, huge
+`JSON.parse`) freezes **every** request, not only the slow one.
+
+</details>
 
 ## Two traps
 

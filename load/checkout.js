@@ -16,7 +16,7 @@ export const options = {
 
   // The test fails if these are not true.
   thresholds: {
-    http_req_duration: ['p(95)<500'], // 95% of requests faster than 500 ms
+    http_req_duration: ['p(95)<300'], // 95% of requests faster than 300 ms
     http_req_failed: ['rate<0.01'], // less than 1% errors
   },
 };

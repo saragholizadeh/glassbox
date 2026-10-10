@@ -33,11 +33,13 @@ export class AppController {
 
     await this.checkout.reserve(items);
     const order = await this.checkout.createOrder(items);
+    const receipt = await this.checkout.receiptCode(order.orderId);
 
     this.logger.info({ orderId: order.orderId }, 'checkout finished');
 
     return {
       ...order,
+      receipt,
       requestId: this.cls.getId(),
       // Paste this into Grafana → Explore → Tempo to see the trace.
       traceId: trace.getActiveSpan()?.spanContext().traceId,

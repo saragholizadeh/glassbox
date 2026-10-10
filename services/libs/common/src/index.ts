@@ -1,5 +1,6 @@
 export * from './health/health.module';
 export * from './health/health.controller';
+export * from './bugs';
 export * from './config/service-info';
 export * from './kafka/kafka';
 export * from './logging/logging.module';

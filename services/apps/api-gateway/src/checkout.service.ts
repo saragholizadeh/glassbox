@@ -1,9 +1,16 @@
 import { BadGatewayException, HttpException, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { trace } from '@opentelemetry/api';
+import { pbkdf2, pbkdf2Sync } from 'node:crypto';
+import { promisify } from 'node:util';
+import { bugOn } from '@app/common';
 import { SERVICE_NAME } from './constants';
 
 const tracer = trace.getTracer(SERVICE_NAME);
+const pbkdf2Async = promisify(pbkdf2);
+
+// A slow hash: about 40 ms of CPU work.
+const HASH_ROUNDS = 100_000;
 
 export interface CheckoutItem {
   productId: number;
@@ -46,11 +53,18 @@ export class CheckoutService {
   async createOrder(items: CheckoutItem[]) {
     const ordersUrl = process.env.ORDERS_URL ?? 'http://localhost:3002';
 
-    const res = await fetch(`${ordersUrl}/orders`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ items }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${ordersUrl}/orders`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+    } catch {
+      // No answer at all: orders-service is down.
+      this.logger.error('orders-service is not reachable');
+      throw new BadGatewayException('orders-service is not reachable');
+    }
 
     // 4xx: the user sent something wrong (like an unknown product). Pass it on.
     if (res.status >= 400 && res.status < 500) {
@@ -64,5 +78,21 @@ export class CheckoutService {
     }
 
     return (await res.json()) as { orderId: number; totalCents: number; status: string };
+  }
+
+  /** A receipt code for the order. Made with a slow hash, like a password. */
+  async receiptCode(orderId: number): Promise<string> {
+    const input = String(orderId);
+
+    if (bugOn('event-loop')) {
+      // BUG 1 (see README). The Sync version blocks Node: while it runs,
+      // no other request can be served.
+      const hash = pbkdf2Sync(input, 'glassbox', HASH_ROUNDS, 16, 'sha512');
+      return hash.toString('hex');
+    }
+
+    // The async version runs on a worker thread. Node keeps serving other requests.
+    const hash = await pbkdf2Async(input, 'glassbox', HASH_ROUNDS, 16, 'sha512');
+    return hash.toString('hex');
   }
 }
