@@ -10,6 +10,7 @@ console.log(`
   ${BOLD}Kafka UI${RESET}     http://localhost:8080   ${DIM}messages, and their headers${RESET}
   Prometheus   http://localhost:9090
   Tempo        http://localhost:3200
+  Pyroscope    http://localhost:4040
   Loki         http://localhost:3100
 
   ${DIM}Kafka, Tempo and Loki need ~20s to report healthy.${RESET}

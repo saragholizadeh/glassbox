@@ -3,7 +3,8 @@
 **Watch a NestJS system the way you would in production.**
 
 Three small NestJS services talk over HTTP and Kafka. Every request leaves logs, a
-trace and metrics. Grafana shows it all in one place.
+trace and metrics, and a profiler records which functions use the CPU. Grafana shows
+it all in one place.
 
 Later the project will get **five performance bugs, added on purpose**. You find each
 one with the tools.
@@ -107,8 +108,16 @@ npm run load
 requests, how fast (p95), how many errors.
 
 While it runs, open Grafana → **Dashboards** → Glassbox → **Glassbox — Services**. You
-see requests per second, status codes, latency, event loop delay, Kafka messages and
-memory.
+see requests per second, status codes, latency, event loop delay, Kafka messages,
+memory and the number of series in Prometheus.
+
+**6. See the flame graph**
+
+Grafana → **Explore** → top-left dropdown → **Pyroscope** → profile type
+**wall → cpu** → `{service_name="api-gateway"}` → Run query.
+
+Each bar is a function. **Wider = more CPU time.** Bars below a function are the
+functions it called.
 
 ---
 
@@ -134,6 +143,10 @@ traceparent: 00-43ffd1b608e7117deab953434832c154-a1b2c3d4e5f60718-01
 itself: HTTP, Kafka, event loop, memory. We made one by hand: `payments_processed_total`.
 The apps send metrics to the Collector every 10 s. Prometheus reads them from there.
 
+**Profiles.** A trace says **which step** is slow. A profile says **which function**
+uses the CPU. About 100 times a second, the profiler looks at what Node is running
+and sends it to Pyroscope. Grafana draws it as a **flame graph**.
+
 **Pino vs Winston.** orders-service uses Winston, the others use Pino. Same JSON
 shape. Pino is about 2× faster (`npm run bench:loggers`).
 
@@ -148,6 +161,7 @@ shape. Pino is about 2× faster (`npm run bench:loggers`).
 | Tempo | http://localhost:3200 | Stores traces |
 | Loki | http://localhost:3100 | Stores logs |
 | Prometheus | http://localhost:9090 | Stores metrics |
+| Pyroscope | http://localhost:4040 | Stores profiles (flame graphs) |
 | OTel Collector | localhost:4317 / 4318 | Gets all data first, sends it on |
 | Kafka | localhost:29092 | Message queue |
 | Postgres | localhost:5432 | Orders and products |
@@ -167,7 +181,7 @@ shape. Pino is about 2× faster (`npm run bench:loggers`).
 - [x] **05 Metrics** — request rate, errors, latency, a Grafana dashboard
 - [x] **06 Load** — k6 sends fake traffic
 - [x] **07 Bugs** — Postgres and Redis, then five bugs to find (see Bug hunt)
-- [ ] **08 Profiling** — see which function uses the CPU
+- [x] **08 Profiling** — Pyroscope: see which function uses the CPU
 
 ---
 
@@ -204,6 +218,7 @@ difference between "healthy" and "bug on" should look the same.
 - Time a request that does nothing: `curl -w "%{time_total}\n" localhost:3001/health/live`
   during `npm run load`. Why is it slow?
 - Open a slow checkout trace. Is there time that **no span** explains?
+- Flame graph for `api-gateway` (see Try it, step 6). Which function is the widest?
 
 <details>
 <summary>Answer</summary>
@@ -223,6 +238,10 @@ What we measured (20 users):
 | `/health/live` p50 | 1.3 ms | 41 ms |
 | `/health/live` max | 5 ms | 509 ms |
 | event loop delay (max p99) | 11 ms | 407 ms |
+| `receiptCode` in the flame graph | 0.02% | 83.5% |
+
+The flame graph shows the whole path: `receiptCode` → `pbkdf2Sync` → native code.
+Healthy, the same work shows as **"Non JS threads activity"**: the worker threads.
 
 **The lesson:** waiting (`await`) is fine. Blocking (`...Sync`, big loops, huge
 `JSON.parse`) freezes **every** request, not only the slow one.
@@ -373,7 +392,7 @@ working.
 glassbox/
 ├── services/            NestJS monorepo
 │   ├── apps/            api-gateway, orders-service, payments-service
-│   └── libs/common/     health, logging, otel, kafka
+│   └── libs/common/     health, logging, otel, profiling, kafka, bugs
 ├── infra/               config for every container
 │   └── grafana/dashboards/   the dashboard (JSON)
 ├── load/                k6 load test

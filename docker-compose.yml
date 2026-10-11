@@ -158,6 +158,15 @@ services:
     extra_hosts:
       - 'host.docker.internal:host-gateway'
 
+  # Stores profiles: which functions use the CPU. Shown as flame graphs.
+  pyroscope:
+    image: grafana/pyroscope:1.13.4
+    container_name: glassbox-pyroscope
+    ports:
+      - '4040:4040'
+    volumes:
+      - pyroscope-data:/data
+
   grafana:
     image: grafana/grafana:11.5.1
     container_name: glassbox-grafana
@@ -165,6 +174,7 @@ services:
       - prometheus
       - tempo
       - loki
+      - pyroscope
     ports:
       - '3000:3000'
     environment:
@@ -198,3 +208,4 @@ volumes:
   loki-data:
   prometheus-data:
   grafana-data:
+  pyroscope-data:

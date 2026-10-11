@@ -18,6 +18,7 @@ const targets = [
   { group: 'telemetry', name: 'OTel Collector (metrics)', kind: 'http', url: 'http://localhost:8889/metrics' },
   { group: 'telemetry', name: 'Tempo', kind: 'http', url: 'http://localhost:3200/ready' },
   { group: 'telemetry', name: 'Loki', kind: 'http', url: 'http://localhost:3100/ready' },
+  { group: 'telemetry', name: 'Pyroscope', kind: 'http', url: 'http://localhost:4040/ready' },
   { group: 'telemetry', name: 'Prometheus', kind: 'http', url: 'http://localhost:9090/-/ready' },
   { group: 'telemetry', name: 'Grafana', kind: 'http', url: 'http://localhost:3000/api/health' },
   { group: 'telemetry', name: 'Kafka UI', kind: 'http', url: 'http://localhost:8080/actuator/health' },
