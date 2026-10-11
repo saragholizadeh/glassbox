@@ -1,4 +1,5 @@
-// k6 load test: many fake users do checkouts at the same time.
+// k6 load test: many fake users do checkouts at the same time,
+// and look at their order history.
 // Run with:  npm run load
 
 import http from 'k6/http';
@@ -35,6 +36,10 @@ export default function () {
   });
 
   check(res, { 'status is 201': (r) => r.status === 201 });
+
+  // Then the user looks at the order history.
+  const history = http.get(`${BASE_URL}/orders`);
+  check(history, { 'history is 200': (r) => r.status === 200 });
 
   // A real user waits a bit between clicks.
   sleep(1);

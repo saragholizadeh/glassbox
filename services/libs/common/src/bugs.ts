@@ -2,7 +2,8 @@
  * Bugs added on purpose, to practise finding them. All are off by default.
  * Turn one on in .env, then restart:  BUGS=event-loop
  */
-export type Bug = 'event-loop';
+export type Bug =
+  'event-loop' | 'n-plus-one' | 'request-scope' | 'broken-trace' | 'labels';
 
 export function bugOn(bug: Bug): boolean {
   return (process.env.BUGS ?? '')

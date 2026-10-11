@@ -2,7 +2,7 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { metrics, trace } from '@opentelemetry/api';
 import type { KafkaMessage } from 'kafkajs';
-import { createKafka, ORDER_CREATED_TOPIC } from '@app/common';
+import { bugOn, createKafka, ORDER_CREATED_TOPIC } from '@app/common';
 import { SERVICE_NAME } from './constants';
 
 const tracer = trace.getTracer(SERVICE_NAME);
@@ -62,7 +62,8 @@ export class PaymentsConsumer implements OnModuleInit, OnModuleDestroy {
       span.end();
     });
 
-    paymentsProcessed.add(1);
+    // BUG 5 (see README). order.id as a label: every order makes a new series.
+    paymentsProcessed.add(1, bugOn('labels') ? { 'order.id': orderId } : {});
     this.logger.info({ orderId }, 'payment done');
   }
 }

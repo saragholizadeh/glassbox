@@ -166,10 +166,7 @@ shape. Pino is about 2× faster (`npm run bench:loggers`).
 - [x] **04 Connect** — gateway → orders (HTTP) → payments (Kafka), one trace
 - [x] **05 Metrics** — request rate, errors, latency, a Grafana dashboard
 - [x] **06 Load** — k6 sends fake traffic
-- [ ] **07 Bugs**
-  - [x] orders saved in Postgres, products cached in Redis
-  - [x] bug 1: blocked event loop
-  - [ ] bugs 2–5
+- [x] **07 Bugs** — Postgres and Redis, then five bugs to find (see Bug hunt)
 - [ ] **08 Profiling** — see which function uses the CPU
 
 ---
@@ -181,19 +178,22 @@ off by default.
 
 **How to play**
 
-1. Run `npm run load` with no bugs. Write down p95. (Healthy: about **120 ms**.)
+1. Run `npm run load` with no bugs. Write down p95. (Healthy: about **130 ms**.)
 2. Turn a bug on in `.env`, for example `BUGS=event-loop`. Restart `npm run dev`.
 3. Run `npm run load` again. Something is worse.
 4. Find the cause with Grafana, **before** you open the answer.
 5. Set `BUGS=` back to empty and restart.
 
-| # | `BUGS=` | Status |
+| # | `BUGS=` | Symptom |
 |---|---|---|
-| 1 | `event-loop` | ready |
-| 2 | `n-plus-one` | coming |
-| 3 | `request-scope` | coming |
-| 4 | `broken-trace` | coming |
-| 5 | `labels` | coming |
+| 1 | `event-loop` | everything is slow, even `/health/live` |
+| 2 | `n-plus-one` | order history is slow |
+| 3 | `request-scope` | k6 says all is fine… but is it? |
+| 4 | `broken-trace` | the checkout trace has no payment |
+| 5 | `labels` | Prometheus keeps growing |
+
+Note: the numbers below are from a laptop. Yours will be different, but the
+difference between "healthy" and "bug on" should look the same.
 
 ### Bug 1 — `event-loop`
 
@@ -226,6 +226,134 @@ What we measured (20 users):
 
 **The lesson:** waiting (`await`) is fine. Blocking (`...Sync`, big loops, huge
 `JSON.parse`) freezes **every** request, not only the slow one.
+
+</details>
+
+### Bug 2 — `n-plus-one`
+
+**Symptom:** the order history (`GET /orders`) is slow. But k6's total p95 looks fine.
+
+**Hints:**
+- k6 mixes all requests together. Look at **one route**: Dashboard → **Latency p95** →
+  `orders-service /orders`.
+- Open a `GET /orders` trace. Count the `pg.query` spans.
+
+<details>
+<summary>Answer</summary>
+
+`latest()` in `orders-service/src/orders.service.ts` reads the orders with 1 query,
+then reads the items **once per order**, in a loop. 50 orders = **51 queries**.
+
+The fix: one query for the items of **all** orders: `WHERE order_id = ANY($1)`. Then
+it's always 2 queries, for 5 orders or 500.
+
+| | healthy | bug on |
+|---|---|---|
+| queries per `GET /orders` | 2 | 51 |
+| `GET /orders` p95 | 4.9 ms | 48.8 ms |
+| k6 total p95 | 129 ms | 132 ms |
+
+**The lesson:** a total number can hide one slow endpoint. And the database is fast,
+so each query looks fine alone. The problem is the **count**. In a trace, N+1 looks
+like a long ladder of identical small bars.
+
+</details>
+
+### Bug 3 — `request-scope`
+
+**Symptom:** none in k6! Latency and errors look normal. But something grows.
+
+**Hints:**
+- Dashboard → **Memory**. Is `orders-service` bigger than the others?
+- Count Redis connections before and after `npm run load`:
+  `docker exec glassbox-redis redis-cli info clients | grep connected_clients`
+- Open any `POST /orders` trace. What does Redis do **before** `get`?
+
+<details>
+<summary>Answer</summary>
+
+In `orders-service/src/app.module.ts`, `ProductsService` gets `Scope.REQUEST`. Now Nest
+creates a **new** `ProductsService` for every request. Its constructor opens a new
+Redis connection, and nobody closes it. (Nest does not call `onModuleDestroy` for
+request-scoped providers.)
+
+And it spreads: `OrdersService` and `AppController` use `ProductsService`, so they
+become request-scoped too.
+
+| | healthy | bug on |
+|---|---|---|
+| Redis connections after 1 load test | 1 | 3,283 |
+| orders-service heap | ~50 MB | 127 MB |
+| k6 p95 | 129 ms | 132 ms |
+
+Redis allows 10,000 connections by default. After about 3 load tests, it says **"max
+number of clients reached"** and every checkout fails.
+
+**The lesson:** use the default scope (one instance for the whole app). Only use
+`Scope.REQUEST` when you really need it, and never for something that opens
+connections. A leak doesn't show in latency. It shows in **counts that only go up**.
+
+</details>
+
+### Bug 4 — `broken-trace`
+
+**Symptom:** the checkout trace stops at orders-service. The payment is missing.
+
+**Hints:**
+- Open a checkout trace. Is there a `send order.created` span?
+- Search Tempo for Service Name `payments-service`. Where does its trace **start**?
+- "Logs for this span" on a checkout: are the payment logs there?
+
+<details>
+<summary>Answer</summary>
+
+In `orders-service/src/order-events.service.ts`, messages are not sent right away.
+They wait in a list, and a timer (`setInterval`) sends them every 200 ms, in one batch.
+
+OTel keeps "which trace am I in?" in **AsyncLocalStorage**, the same tool our `req_id`
+uses. A timer that was started at app startup does not belong to any request. So
+the batch is sent with **no trace**, and the payment starts a new one.
+
+The checkout trace ends at orders. The payment is a separate trace, with
+`send order.created` as its root.
+
+The fix: send right away, inside the request. If you really need batching, save the
+`traceparent` with each message when you add it to the list.
+
+**The lesson:** context lives in the async call chain. Anything that breaks the
+chain — timers, queues in memory, `EventEmitter` — breaks the trace. And there is
+**no error**. You only see it if you look at the trace.
+
+</details>
+
+### Bug 5 — `labels`
+
+**Symptom:** Prometheus gets bigger and bigger, even when traffic is the same.
+
+**Hints:**
+- Dashboard → **Series in Prometheus**. Compare before and after `npm run load`.
+- In Explore → Prometheus: `count(payments_processed_total)`. How many? How many
+  did you expect?
+
+<details>
+<summary>Answer</summary>
+
+In `payments-service/src/payments.consumer.ts`, the counter gets `order.id` as a
+label. Every new label value makes a new **series**. One series per order.
+
+| | healthy | bug on |
+|---|---|---|
+| `payments_processed_total` series | 1 | 1,648 |
+| all series in Prometheus | 4,590 | 6,269 |
+
+Each series costs memory in Prometheus, forever (until it expires). With a real
+shop, this is millions of series, and Prometheus runs out of memory.
+
+The OTel SDK has a safety net: after **2,000** series per metric, it puts the rest
+into one "overflow" series. That protects Prometheus, but the numbers are now wrong.
+
+The fix: labels only for things with **few** values: status, route, service. An
+order id or a user id belongs in **logs and traces**, not in metrics.
 
 </details>
 

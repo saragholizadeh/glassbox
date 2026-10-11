@@ -80,6 +80,16 @@ export class CheckoutService {
     return (await res.json()) as { orderId: number; totalCents: number; status: string };
   }
 
+  /** The latest 50 orders, from orders-service. */
+  async latestOrders(): Promise<unknown> {
+    const ordersUrl = process.env.ORDERS_URL ?? 'http://localhost:3002';
+
+    const res = await fetch(`${ordersUrl}/orders?limit=50`).catch(() => undefined);
+    if (!res?.ok) throw new BadGatewayException('orders-service failed');
+
+    return res.json();
+  }
+
   /** A receipt code for the order. Made with a slow hash, like a password. */
   async receiptCode(orderId: number): Promise<string> {
     const input = String(orderId);

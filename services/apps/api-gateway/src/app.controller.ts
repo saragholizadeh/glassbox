@@ -19,7 +19,13 @@ export class AppController {
     return {
       service: SERVICE_NAME,
       role: 'The front door. Receives the checkout and calls orders-service.',
-      endpoints: ['GET /', 'POST /checkout', 'GET /health/live', 'GET /health/ready'],
+      endpoints: [
+        'GET /',
+        'POST /checkout',
+        'GET /orders',
+        'GET /health/live',
+        'GET /health/ready',
+      ],
       requestId: this.cls.getId(),
     };
   }
@@ -44,5 +50,11 @@ export class AppController {
       // Paste this into Grafana → Explore → Tempo to see the trace.
       traceId: trace.getActiveSpan()?.spanContext().traceId,
     };
+  }
+
+  /** Order history: the latest 50 orders with their items. */
+  @Get('orders')
+  latestOrders() {
+    return this.checkout.latestOrders();
   }
 }

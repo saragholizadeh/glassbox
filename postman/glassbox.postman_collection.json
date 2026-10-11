@@ -71,6 +71,22 @@
           }
         },
         {
+          "name": "Order history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/orders",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          }
+        },
+        {
           "name": "Checkout with my own request id",
           "request": {
             "method": "POST",

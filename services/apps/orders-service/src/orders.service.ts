@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { bugOn } from '@app/common';
 import { DbService } from './db.service';
 import { ProductsService } from './products.service';
 
@@ -82,6 +83,21 @@ export class OrdersService {
       'SELECT id, total_cents, created_at FROM orders ORDER BY id DESC LIMIT $1',
       [limit],
     );
+
+    if (bugOn('n-plus-one')) {
+      // BUG 2 (see README). One query for EACH order: 50 orders = 51 queries.
+      const result = [];
+      for (const order of orders) {
+        const { rows: items } = await this.db.pool.query<ItemRow>(
+          'SELECT order_id, product_id, quantity, price_cents FROM order_items WHERE order_id = $1',
+          [order.id],
+        );
+        result.push({ ...order, items });
+      }
+      return result;
+    }
+
+    // One query for the items of ALL orders.
 
     const { rows: items } = await this.db.pool.query<ItemRow>(
       'SELECT order_id, product_id, quantity, price_cents FROM order_items WHERE order_id = ANY($1)',
