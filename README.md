@@ -9,7 +9,7 @@ it all in one place.
 Later the project will get **five performance bugs, added on purpose**. You find each
 one with the tools.
 
-![One checkout request as a trace in Grafana](docs/images/step-03-trace.png)
+![One checkout through all three services, as one trace in Grafana](docs/images/trace-full.png)
 
 ---
 
@@ -90,10 +90,16 @@ Click any span → **Logs for this span**. Or in Explore → **Loki**:
 {service_name=~".+"} | trace_id="paste-it-here"
 ```
 
+All log lines of that one request, from all three services:
+
+![The logs of one request in Loki](docs/images/logs-one-request.png)
+
 **4. See the Kafka message**
 
 Kafka UI (http://localhost:8080) → Topics → `order.created` → Messages. Open one
 message and look at its **headers**: there is a `traceparent`.
+
+![A Kafka message with its traceparent header](docs/images/kafka-traceparent.png)
 
 **5. See the dashboard**
 
@@ -110,6 +116,9 @@ requests, how fast (p95), how many errors.
 While it runs, open Grafana → **Dashboards** → Glassbox → **Glassbox — Services**. You
 see requests per second, status codes, latency, event loop delay, Kafka messages,
 memory and the number of series in Prometheus.
+
+![The dashboard during a load test, part 1](docs/images/dashboard-1.png)
+![The dashboard during a load test, part 2](docs/images/dashboard-2.png)
 
 **6. See the flame graph**
 
@@ -192,7 +201,7 @@ off by default.
 
 **How to play**
 
-1. Run `npm run load` with no bugs. Write down p95. (Healthy: about **130 ms**.)
+1. Run `npm run load` with no bugs. Write down the checkout p95. (Healthy: about **240 ms**.)
 2. Turn a bug on in `.env`, for example `BUGS=event-loop`. Restart `npm run dev`.
 3. Run `npm run load` again. Something is worse.
 4. Find the cause with Grafana, **before** you open the answer.
@@ -234,14 +243,20 @@ What we measured (20 users):
 
 | | healthy | bug on |
 |---|---|---|
-| checkout p95 | 120 ms | 467 ms |
+| checkout p95 | 236 ms | 406 ms |
 | `/health/live` p50 | 1.3 ms | 41 ms |
 | `/health/live` max | 5 ms | 509 ms |
-| event loop delay (max p99) | 11 ms | 407 ms |
+| event loop delay (max p99) | 12 ms | 268 ms |
 | `receiptCode` in the flame graph | 0.02% | 83.5% |
+
+The event loop delay of `api-gateway` jumps. The other two services stay flat:
+
+![Event loop delay with bug 1 on](docs/images/bug1-event-loop.png)
 
 The flame graph shows the whole path: `receiptCode` → `pbkdf2Sync` → native code.
 Healthy, the same work shows as **"Non JS threads activity"**: the worker threads.
+
+![Flame graph with bug 1 on: pbkdf2Sync is the widest bar](docs/images/bug1-flame-graph.png)
 
 **The lesson:** waiting (`await`) is fine. Blocking (`...Sync`, big loops, huge
 `JSON.parse`) freezes **every** request, not only the slow one.
@@ -271,6 +286,10 @@ it's always 2 queries, for 5 orders or 500.
 | queries per `GET /orders` | 2 | 51 |
 | `GET /orders` p95 | 4.9 ms | 48.8 ms |
 | k6 total p95 | 129 ms | 132 ms |
+
+One `GET /orders` trace: 109 spans, a ladder of the same small query again and again:
+
+![A GET /orders trace with bug 2 on: one query per order](docs/images/bug2-n-plus-one.png)
 
 **The lesson:** a total number can hide one slow endpoint. And the database is fast,
 so each query looks fine alone. The problem is the **count**. In a trace, N+1 looks
@@ -338,6 +357,10 @@ The checkout trace ends at orders. The payment is a separate trace, with
 
 The fix: send right away, inside the request. If you really need batching, save the
 `traceparent` with each message when you add it to the list.
+
+The checkout trace ends at orders-service. No Kafka, no payment:
+
+![A checkout trace with bug 4 on: it stops at orders-service](docs/images/bug4-broken-trace.png)
 
 **The lesson:** context lives in the async call chain. Anything that breaks the
 chain — timers, queues in memory, `EventEmitter` — breaks the trace. And there is
