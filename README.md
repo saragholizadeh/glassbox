@@ -211,7 +211,7 @@ difference between "healthy" and "bug on" should look the same.
 
 ### Bug 1 — `event-loop`
 
-**Symptom:** checkout gets slow under load. k6 fails the p95 limit.
+**Symptom:** checkout gets slow under load. k6 shows ✗ on the checkout p95 limit.
 
 **Hints:**
 - Dashboard → **Event loop delay**. What happens to `api-gateway`?

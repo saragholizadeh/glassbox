@@ -16,8 +16,10 @@ export const options = {
   ],
 
   // The test fails if these are not true.
+  // Checkout and history get their own limit. One total would hide a slow endpoint.
   thresholds: {
-    http_req_duration: ['p(95)<300'], // 95% of requests faster than 300 ms
+    'http_req_duration{name:checkout}': ['p(95)<300'], // 95% of checkouts faster than 300 ms
+    'http_req_duration{name:history}': ['p(95)<300'],
     http_req_failed: ['rate<0.01'], // less than 1% errors
   },
 };
@@ -33,12 +35,13 @@ export default function () {
 
   const res = http.post(`${BASE_URL}/checkout`, JSON.stringify({ items }), {
     headers: { 'content-type': 'application/json' },
+    tags: { name: 'checkout' },
   });
 
   check(res, { 'status is 201': (r) => r.status === 201 });
 
   // Then the user looks at the order history.
-  const history = http.get(`${BASE_URL}/orders`);
+  const history = http.get(`${BASE_URL}/orders`, { tags: { name: 'history' } });
   check(history, { 'history is 200': (r) => r.status === 200 });
 
   // A real user waits a bit between clicks.
