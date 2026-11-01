@@ -1,15 +1,38 @@
 # glassbox
 
-**Watch a NestJS system the way you would in production.**
+**A small NestJS system you can run on your laptop, to learn how to find performance
+problems the way you would in production.**
 
-Three small NestJS services talk over HTTP and Kafka. Every request leaves logs, a
-trace and metrics, and a profiler records which functions use the CPU. Grafana shows
-it all in one place.
+## Why this exists
 
-Later the project will get **five performance bugs, added on purpose**. You find each
-one with the tools.
+In production, you can't add `console.log` and restart. When an app is slow, you need
+to answer questions like:
+
+- **Which** service is slow? **Which step** inside it?
+- Is it the database, the network, or our own code?
+- Did one request fail, or all of them?
+
+Tools like OpenTelemetry, Prometheus, Grafana and Kafka are hard to learn from docs
+alone. You need a real system, real traffic, and a real problem to find.
+
+glassbox gives you all three, ready to run with one command.
+
+## What you get
+
+- **A real system:** three NestJS services that talk over HTTP and Kafka, with
+  Postgres and Redis.
+- **Full monitoring, already set up:** logs, traces, metrics and CPU profiles, all in
+  one Grafana.
+- **Fake traffic:** a k6 load test with 20 users.
+- **A bug hunt:** five real performance bugs, off by default. Turn one on, then find
+  it with the tools. Each one has hints and an answer.
+
+**Who it's for:** Node.js and NestJS developers who know how to build an API, but
+have never had to find out why it is slow in production.
 
 ![One checkout through all three services, as one trace in Grafana](docs/images/trace-full.png)
+
+*One checkout request, followed through all three services and Kafka.*
 
 ---
 
